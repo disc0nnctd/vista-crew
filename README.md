@@ -10,6 +10,23 @@ propose anything, but it may only *state* what a validator returned — and that
 is enforced by a gate, not by a line in a prompt. See
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+![Ranked cover for P-2291](screenshots/04-ranked-cover.png)
+
+A captain is lost two hours before report. The recommendation, its cost, and
+the seven rules that cleared it — every figure on that screen was computed by
+Python, and the model could not have written one that was not.
+
+![Why the others were ruled out](screenshots/05-exclusions.png)
+
+All nineteen candidates that were ruled out, each carrying the rule that
+stopped them. C-3305 is marked *not callable* rather than illegal: being
+outside an on-call window breaks no rule, and a controller who confuses the two
+makes the wrong call.
+
+More in [screenshots/](screenshots/) — the boundary diagram, the duty-week
+timeline with its rest gap, the joint plan for two simultaneous sick calls, and
+the drill-down that answers "why not them?"
+
 ## Where it stands
 
 | Measurement | Result |

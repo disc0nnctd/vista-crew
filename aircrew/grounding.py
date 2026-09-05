@@ -242,7 +242,12 @@ def _entities(text: str) -> set[str]:
 
 
 def _sentences(text: str) -> list[str]:
-    return [t for t in re.split(r"(?<=[.!?])\s+|\n+", text or "") if t.strip()]
+    # Not after an initial. Crew are named "D. Reddy" throughout the dataset,
+    # and splitting there hides the first half of the sentence from the seam
+    # rules -- which let through "Assign Captain C-3310 (D. Reddy) as the
+    # reserve callout: Assign Captain C-3310 (reserve callout)".
+    return [t for t in re.split(r"(?<=[.!?])(?<![A-Z]\.)\s+|\n+", text or "")
+            if t.strip()]
 
 
 def _hedged(sentence: str) -> bool:
@@ -597,14 +602,16 @@ def _unrepeat(short: str, head: str, before: str = "") -> str:
             break
         short = short[m.end():]
 
-    tail_word = _WORD.findall(short)
-    next_word = _WORD.match(head.lstrip("*_ "))
-    if not tail_word or not next_word:
-        return short
-    if tail_word[-1].lower() != next_word.group(0).lower():
-        return short
-    cut = short.rstrip()[: -len(tail_word[-1])].rstrip()
-    return cut or short
+    # The other side of the seam: whatever the model is about to write itself.
+    # Matched as a phrase, not a word, because the overlap is often two --
+    # "{{claim:c4}} legal candidates" against a short of "5 legal candidates".
+    words = short.split()
+    ahead = _WORD.findall(head.lstrip("*_ ")[:60])
+    for take in range(min(3, len(words) - 1), 0, -1):
+        tail = [w.strip(".,;:()").lower() for w in words[-take:]]
+        if tail and tail == [w.lower() for w in ahead[:take]]:
+            return " ".join(words[:-take]) or short
+    return short
 
 
 def _pick(claim: dict, before: str, after: str = "") -> str:

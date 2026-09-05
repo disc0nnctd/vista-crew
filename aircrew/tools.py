@@ -669,6 +669,10 @@ class Tools:
         cl = [
             claim("number", f"{d['legal_candidate_count']} candidates are legal",
                   d["legal_candidate_count"], ALL_RULES,
+                  # Bare, like every other count that has an adjective in
+                  # front of it. "5 legal candidates" fixes "; 5, while 19
+                  # were excluded" and immediately breaks "{{claim}} are
+                  # legal", which becomes "5 legal candidates are legal".
                   short=str(d["legal_candidate_count"])),
             claim("number", f"{d['excluded_count']} candidates are excluded "
                   f"({d['exclusions_orientation']})", d["excluded_count"], ALL_RULES,
