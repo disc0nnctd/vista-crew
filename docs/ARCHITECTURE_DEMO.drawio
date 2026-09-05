@@ -1,0 +1,64 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="Electron" agent="Codex" compressed="false">
+  <diagram id="demo" name="Presentation | one slide">
+    <mxGraphModel dx="1935" dy="1290" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=0;fontFamily=Arial;fontSize=42;fontStyle=1;fontColor=#243342;" value="Crew Ops Advisor" vertex="1">
+          <mxGeometry height="60" width="1480" x="60" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="idea" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=0;fontFamily=Arial;fontSize=29;fontStyle=0;fontColor=#243342;" value="The model asks. Python computes. The controller decides." vertex="1">
+          <mxGeometry height="45" width="1480" x="60" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="question" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=0;fontFamily=Arial;fontSize=25;fontStyle=0;fontColor=#536477;" value="Controller asks: A captain calls in sick two hours before report. Who can cover?" vertex="1">
+          <mxGeometry height="45" width="1480" x="60" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="model" parent="1" style="rounded=1;arcSize=7;whiteSpace=wrap;html=1;fillColor=#eeeafb;strokeColor=#76619d;strokeWidth=2;fontColor=#243342;fontFamily=Arial;fontSize=22;align=left;verticalAlign=top;spacing=24;" value="&lt;b&gt;&lt;font style=&quot;font-size:26px&quot;&gt;Language model&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;Understands the request&lt;br&gt;Chooses tools&lt;br&gt;Drafts the explanation" vertex="1">
+          <mxGeometry height="210" width="310" x="60" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="engine" parent="1" style="rounded=1;arcSize=7;whiteSpace=wrap;html=1;fillColor=#e8f3ec;strokeColor=#548466;strokeWidth=2;fontColor=#243342;fontFamily=Arial;fontSize=22;align=left;verticalAlign=top;spacing=24;" value="&lt;b&gt;&lt;font style=&quot;font-size:26px&quot;&gt;Python engine&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;Checks roster rules&lt;br&gt;Ranks cover options&lt;br&gt;Computes costs" vertex="1">
+          <mxGeometry height="210" width="310" x="450" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="gate" parent="1" style="rounded=1;arcSize=7;whiteSpace=wrap;html=1;fillColor=#fff2d8;strokeColor=#ad8237;strokeWidth=2;fontColor=#243342;fontFamily=Arial;fontSize=22;align=left;verticalAlign=top;spacing=24;" value="&lt;b&gt;&lt;font style=&quot;font-size:26px&quot;&gt;Claim gate&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;Inserts engine claims&lt;br&gt;Checks the draft&lt;br&gt;Retries or withholds" vertex="1">
+          <mxGeometry height="210" width="310" x="840" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="controller" parent="1" style="rounded=1;arcSize=7;whiteSpace=wrap;html=1;fillColor=#eaf2fb;strokeColor=#527aa5;strokeWidth=2;fontColor=#243342;fontFamily=Arial;fontSize=21;align=left;verticalAlign=top;spacing=24;" value="&lt;b&gt;&lt;font style=&quot;font-size:25px&quot;&gt;Controller decides&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;Named crew option&lt;br&gt;Cost and rule evidence&lt;br&gt;Alternatives + exclusions" vertex="1">
+          <mxGeometry height="210" width="310" x="1230" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="records" parent="1" style="rounded=1;arcSize=7;whiteSpace=wrap;html=1;fillColor=#f1f3f5;strokeColor=#808b96;strokeWidth=2;fontColor=#243342;fontFamily=Arial;fontSize=19;align=left;verticalAlign=top;spacing=24;" value="&lt;b&gt;&lt;font style=&quot;font-size:22px&quot;&gt;Published roster data&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;Crew, flights, duty clocks,&lt;br&gt;certifications, rules, costs" vertex="1">
+          <mxGeometry height="140" width="310" x="450" y="665" as="geometry" />
+        </mxCell>
+        <mxCell id="example" parent="1" style="rounded=1;arcSize=7;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b6c0ca;strokeWidth=2;fontColor=#243342;fontFamily=Arial;fontSize=22;align=left;verticalAlign=top;spacing=24;" value="&lt;b&gt;&lt;font style=&quot;font-size:22px&quot;&gt;Example: P-2291&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;C-3310 reserve callout&lt;br&gt;INR 18,500" vertex="1">
+          <mxGeometry height="135" width="310" x="1230" y="650" as="geometry" />
+        </mxCell>
+        <mxCell id="request" edge="1" parent="1" source="model" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#548466;fontSize=17;fontColor=#536477;fontFamily=Arial;labelBackgroundColor=#ffffff;startArrow=block;startFill=1;" target="engine" value="tools">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="evidence" edge="1" parent="1" source="engine" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#548466;fontSize=17;fontColor=#536477;fontFamily=Arial;labelBackgroundColor=#ffffff;" target="gate" value="results">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="draft" edge="1" parent="1" source="model" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#76619d;fontSize=17;fontColor=#536477;fontFamily=Arial;labelBackgroundColor=#ffffff;exitX=0.5;exitY=0;entryX=0.5;entryY=0;dashed=1;" target="gate" value="draft explanation">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="215" y="290" />
+              <mxPoint x="995" y="290" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="answer" edge="1" parent="1" source="gate" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#607286;fontSize=17;fontColor=#536477;fontFamily=Arial;labelBackgroundColor=#ffffff;" target="controller" value="reply">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="read" edge="1" parent="1" source="records" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#808b96;fontSize=17;fontColor=#536477;fontFamily=Arial;labelBackgroundColor=#ffffff;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" target="engine" value="read-only">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="examplelink" edge="1" parent="1" source="controller" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#527aa5;fontSize=17;fontColor=#536477;fontFamily=Arial;labelBackgroundColor=#ffffff;dashed=1;" target="example" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="foot" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=0;fontFamily=Arial;fontSize=22;fontStyle=0;fontColor=#536477;" value="One deterministic engine powers chat, ranked options and direct workspace actions." vertex="1">
+          <mxGeometry height="40" width="1480" x="60" y="825" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

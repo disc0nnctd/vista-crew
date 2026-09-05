@@ -1,0 +1,29 @@
+__pycache__/
+*.pyc
+.venv/
+
+# Secrets. The keys for this demo live in private/ and reach the server through
+# the environment; nothing here is ever committed.
+.env
+.env.*
+*.env
+private/
+**/Keys/
+
+# Organiser-internal: the generator reveals how the answer keys were derived,
+# and this branch exists so the rules are recovered from the data instead.
+generate.py
+
+# Scratch
+ps.txt
+node_modules/
+
+# duplicate of problem_statement/problem_explanation_k66g3nx88t.pdf
+/problem_explanation_k66g3nx88t.pdf
+
+# Generated deploy bundle: rebuilt by worker/build.py before every deploy.
+worker/dist/
+
+# draw.io editor backups
+.$*
+*.bkp

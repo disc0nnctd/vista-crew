@@ -1,0 +1,60 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" aria-labelledby="slide-title slide-desc" width="1600" height="900" viewBox="0 0 1600 900" role="img">
+  <title id="slide-title">Crew Ops Advisor architecture</title>
+  <desc id="slide-desc">The language model interprets a crew controller question, calls a deterministic Python engine, and drafts an explanation. A claim gate checks the draft against engine evidence before a controller chooses an option. The engine reads published roster data.</desc>
+  <rect width="1600" height="900" fill="#ffffff" />
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#607286" />
+    </marker>
+    <marker id="violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#76619d" />
+    </marker>
+    <marker id="green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#548466" />
+    </marker>
+  <marker id="green-start" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 10 0 L 0 5 L 10 10 z" fill="#548466" /></marker></defs>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="700" text-anchor="start" x="60" y="89.28" fill="#243342">Crew Ops Advisor</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="29" font-weight="400" text-anchor="start" x="60" y="147.36" fill="#243342">The model asks. Python computes. The controller decides.</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="400" text-anchor="start" x="60" y="231.0" fill="#536477">Controller asks: A captain calls in sick two hours before report. Who can cover?</text>
+  <polyline points="370,445 450,445" fill="none" stroke="#548466" stroke-width="2.2" marker-end="url(#green)" marker-start="url(#green-start)" />
+  <text font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="400" text-anchor="middle" x="410" y="420" fill="#536477">tools</text>
+  <polyline points="760,445 840,445" fill="none" stroke="#548466" stroke-width="2.2" marker-end="url(#green)" />
+  <text font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="400" text-anchor="middle" x="800" y="420" fill="#536477">results</text>
+  <polyline points="215,340 215,290 995,290 995,340" fill="none" stroke="#76619d" stroke-width="2.2" marker-end="url(#violet)" stroke-dasharray="8 6" />
+  <text font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="400" text-anchor="middle" x="605" y="280" fill="#536477">draft explanation</text>
+  <polyline points="1150,445 1230,445" fill="none" stroke="#607286" stroke-width="2.2" marker-end="url(#arrow)" />
+  <text font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="400" text-anchor="middle" x="1190" y="420" fill="#536477">reply</text>
+  <polyline points="605,665 605,550" fill="none" stroke="#808b96" stroke-width="2.2" marker-end="url(#arrow)" />
+  <text font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="400" text-anchor="middle" x="665" y="615" fill="#536477">read-only</text>
+  <polyline points="1385,550 1385,650" fill="none" stroke="#527aa5" stroke-width="2.2" marker-end="url(#arrow)" stroke-dasharray="8 6" />
+  <rect stroke-width="2" x="60" y="340" width="310" height="210" rx="14" fill="#eeeafb" stroke="#76619d" />
+  <text font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" text-anchor="start" x="84" y="385" fill="#243342">Language model</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" text-anchor="start" x="84" y="428" fill="#243342">Understands the request</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" text-anchor="start" x="84" y="463" fill="#243342">Chooses tools</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" text-anchor="start" x="84" y="498" fill="#243342">Drafts the explanation</text>
+  <rect stroke-width="2" x="450" y="340" width="310" height="210" rx="14" fill="#e8f3ec" stroke="#548466" />
+  <text font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" text-anchor="start" x="474" y="385" fill="#243342">Python engine</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" text-anchor="start" x="474" y="428" fill="#243342">Checks roster rules</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" text-anchor="start" x="474" y="463" fill="#243342">Ranks cover options</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" text-anchor="start" x="474" y="498" fill="#243342">Computes costs</text>
+  <rect stroke-width="2" x="840" y="340" width="310" height="210" rx="14" fill="#fff2d8" stroke="#ad8237" />
+  <text font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" text-anchor="start" x="864" y="385" fill="#243342">Claim gate</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" text-anchor="start" x="864" y="428" fill="#243342">Inserts engine claims</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" text-anchor="start" x="864" y="463" fill="#243342">Checks the draft</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" text-anchor="start" x="864" y="498" fill="#243342">Retries or withholds</text>
+  <rect stroke-width="2" x="1230" y="340" width="310" height="210" rx="14" fill="#eaf2fb" stroke="#527aa5" />
+  <text font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700" text-anchor="start" x="1254" y="385" fill="#243342">Controller decides</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" text-anchor="start" x="1254" y="428" fill="#243342">Named crew option</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" text-anchor="start" x="1254" y="462" fill="#243342">Cost and rule evidence</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" text-anchor="start" x="1254" y="496" fill="#243342">Alternatives + exclusions</text>
+  <rect stroke-width="2" x="450" y="665" width="310" height="140" rx="14" fill="#f1f3f5" stroke="#808b96" />
+  <text font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" text-anchor="start" x="474" y="710" fill="#243342">Published roster data</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="400" text-anchor="start" x="474" y="753" fill="#243342">Crew, flights, duty clocks,</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="400" text-anchor="start" x="474" y="785" fill="#243342">certifications, rules, costs</text>
+  <rect stroke-width="2" x="1230" y="650" width="310" height="135" rx="14" fill="#ffffff" stroke="#b6c0ca" />
+  <text font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" text-anchor="start" x="1254" y="695" fill="#243342">Example: P-2291</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" text-anchor="start" x="1254" y="738" fill="#243342">C-3310 reserve callout</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" text-anchor="start" x="1254" y="773" fill="#243342">INR 18,500</text>
+  <text font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" text-anchor="start" x="60" y="852.48" fill="#536477">One deterministic engine powers chat, ranked options and direct workspace actions.</text>
+</svg>

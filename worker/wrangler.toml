@@ -1,0 +1,15 @@
+name = "vista-crew"
+main = "dist/entry.py"
+compatibility_flags = ["python_workers"]
+compatibility_date = "2025-05-01"
+
+# The page is a static asset; everything under /api is the Python engine.
+# `run_worker_first` matters: without it the asset router answers /api/* with
+# a 404 before the Worker is ever reached.
+[assets]
+directory = "dist/public"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[observability]
+enabled = true

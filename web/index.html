@@ -1,0 +1,1898 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crew Ops Advisor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%230e1116%27/%3E%3Cpath d=%27M2 9h12M8 3v10%27 stroke=%27%23f0b429%27 stroke-width=%271.6%27/%3E%3C/svg%3E">
+<style>
+/* ---------------------------------------------------------------------------
+   Reading this as: a crew-control desk tool for a controller working at 6 a.m.
+   under time pressure, dense and high-contrast, ENERGY 1 / RHYTHM 2 / MOTION 1.
+
+   Dark by default and only dark. Reason: this desk is staffed overnight and the
+   screen sits in a dim room next to a departure board; a white page at 4 a.m. is
+   the thing operators tape paper over. A half-built theme toggle would be worse
+   than one committed theme, so there is no toggle.
+
+   Palette is two greys, one blue, one amber, plus red for a breach. Reason: the
+   only colour that should catch the eye is the one attached to a decision.
+   Blue marks what the engine computed and is safe; amber marks the figure the
+   controller is about to act on; red marks a rule that stops them. Nothing else
+   is coloured, so those three always read.
+--------------------------------------------------------------------------- */
+:root{
+  --bg:#0e1116;          /* near-black, not pure: pure black smears on OLED */
+  --panel:#161b22;       /* one step up, so panels separate without borders */
+  --panel-2:#1c232c;     /* nested surfaces (table headers, chips) */
+  --line:#262d38;
+  --line-2:#333c4a;      /* a border that has to be seen, not just felt */
+  --ink:#e6ebf2;         /* 14.4:1 on --bg */
+  --ink-dim:#9aa7b8;     /* 6.3:1 on --bg, still AA for body text */
+  --ink-faint:#6b7889;   /* 3.6:1 -- labels only, never body text */
+  --accent:#f0b429;      /* the decisive figure. 9.9:1 on --bg */
+  --blue:#4c9aff;        /* computed, and the colour of a rule id */
+  --red:#f85149;         /* a rule that stops you */
+  --green:#3fb950;       /* legal */
+  --warn:#d29922;        /* legal, but it costs you something */
+  --cover:#a371f7;       /* the proposed cover, distinct from both verdicts */
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.45 var(--sans);
+  /* 14px not 16: this screen is a working instrument and density beats comfort */
+}
+/* MOTION 1: nothing moves on its own. The only transition is a 90ms colour
+   change on focus/hover, which is feedback, not animation. */
+*,*::before,*::after{animation:none!important}
+a,button,[tabindex]{transition:background-color .09s,border-color .09s,color .09s}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:3px}
+
+/* --- shell ---------------------------------------------------------------
+   Two panes, conversation left at a fixed comfortable measure, workspace right
+   taking the rest. Reason: the evidence is the wide thing (tables of 40
+   candidates); the decision is the narrow thing. */
+.app{display:grid;grid-template-columns:minmax(340px,440px) 1fr;height:calc(100vh - 45px)}
+@media (max-width:900px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto 1fr;height:auto}
+  .chat{border-right:none;border-bottom:1px solid var(--line);max-height:60vh}
+}
+
+/* --- the bar -------------------------------------------------------------
+   Full width, above both panes. The snapshot, the counts and the model are
+   facts about the whole desk, so they do not belong inside the chat column. */
+header.bar{
+  display:flex;align-items:center;gap:10px;height:45px;
+  padding:0 16px;border-bottom:1px solid var(--line);background:var(--panel);
+}
+header.bar h1{margin:0;font-size:14px;font-weight:650;letter-spacing:.01em;white-space:nowrap}
+header.bar .sub{font-size:12px;color:var(--ink-faint);white-space:nowrap}
+.bar-spacer{margin-left:auto}
+header.bar .status{font-size:12px;color:var(--ink-dim);font-family:var(--mono);white-space:nowrap}
+header.bar .status b{color:var(--ink);font-weight:600}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green)}
+.dot.off{background:var(--ink-faint)}
+.toggle{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-dim);
+  cursor:pointer;white-space:nowrap}
+.toggle input{margin:0;cursor:pointer}
+.devonly{display:none}
+body.dev .devonly{display:inline-block}
+@media (max-width:1100px){header.bar .status{display:none}}
+.ghost{background:none;border:1px solid var(--line);color:var(--ink-dim);
+  font:12px var(--sans);padding:3px 9px;border-radius:3px;cursor:pointer}
+.ghost:hover{color:var(--ink);border-color:var(--blue)}
+
+/* --- the boundary and the flow, both shown rather than described --------- */
+.modal{position:fixed;inset:0;z-index:200;background:rgba(6,9,13,.72);
+  display:flex;align-items:center;justify-content:center;padding:24px}
+.modal-card{background:var(--panel);border:1px solid var(--line-2);border-radius:8px;
+  width:min(1080px,100%);max-height:90vh;display:flex;flex-direction:column;
+  box-shadow:0 18px 60px rgba(0,0,0,.5)}
+.modal-card > header{display:flex;align-items:center;gap:10px;padding:12px 16px;
+  border-bottom:1px solid var(--line)}
+.modal-card > header h3{margin:0;font-size:14px}
+.modal-card > header .ghost{margin-left:auto}
+.modal-card > .body{padding:16px;overflow:auto}
+.modal-card .muted{color:var(--ink-dim);margin:0 0 14px;font-size:13px}
+.boundary-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:820px){.boundary-grid{grid-template-columns:1fr}}
+.boundary-grid h4{margin:0 0 7px;font-size:11px;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--ink-faint)}
+.boundary-grid pre{margin:0;padding:11px;background:#0b0f14;border:1px solid var(--line);
+  border-radius:4px;font:11.5px/1.5 var(--mono);color:var(--ink-dim);
+  white-space:pre-wrap;max-height:52vh;overflow:auto}
+.toolist{list-style:none;margin:0;padding:0;max-height:52vh;overflow:auto}
+.toolist li{padding:7px 0;border-bottom:1px solid var(--line)}
+.toolist li:last-child{border-bottom:none}
+.toolist code{font:12px var(--mono);color:var(--blue)}
+.toolist .desc{color:var(--ink-dim);font-size:12px;margin-top:2px}
+.toolist .tier{font:600 10px var(--mono);border:1px solid currentColor;border-radius:999px;
+  padding:0 6px;margin-left:6px}
+.tier.t1{color:var(--ink-faint)}.tier.t2{color:var(--blue)}.tier.t3{color:var(--green)}
+.flow-wrap{overflow:auto}
+.flow-legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:14px;font-size:12px;color:var(--ink-dim)}
+.flow-legend span{display:flex;align-items:center;gap:6px}
+.flow-legend i{width:11px;height:11px;border-radius:2px;display:inline-block}
+.modal-card.narrow{width:min(760px,100%)}
+.brief{max-width:none}
+.brief-sec{margin-bottom:20px}
+.brief-sec h4{margin:0 0 7px;font-size:11px;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--blue)}
+.brief p{margin:0 0 9px;line-height:1.55;color:var(--ink-dim)}
+.brief ul{margin:0;padding-left:18px;color:var(--ink-dim);line-height:1.55}
+.brief li{margin:4px 0}
+.brief b{color:var(--ink)}
+.brief-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:9px}
+.brief-table th{text-align:left;padding:6px 8px;background:var(--panel-2);
+  color:var(--ink-faint);font:600 11px var(--sans);text-transform:uppercase;letter-spacing:.05em}
+.brief-table td{padding:6px 8px;border-top:1px solid var(--line);color:var(--ink-dim)}
+.brief-table td.num{color:var(--accent);font-family:var(--mono);white-space:nowrap}
+.brief .muted .ghost{margin:0 3px}
+
+/* --- chat ---------------------------------------------------------------- */
+.chat{display:flex;flex-direction:column;border-right:1px solid var(--line);background:var(--panel);min-height:0}
+.log{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:14px;min-height:0}
+/* The controller's own words sit in a bubble; the advisor's answer does not.
+   Reason: boxing the answer makes it look like a quotation from somewhere
+   else, when it is the main content of the pane. */
+.msg{max-width:100%}
+.msg .who{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-faint);margin-bottom:5px}
+.msg .body{white-space:pre-wrap}
+.msg.you .body{background:var(--panel-2);border:1px solid var(--line-2);
+  padding:9px 12px;border-radius:8px}
+.msg.note .body{color:var(--ink-dim);font-size:13px;border-left:2px solid var(--line);padding-left:9px}
+.msg.err .body{color:var(--red);border-left:2px solid var(--red);padding-left:9px}
+.trace{margin-top:10px;font-size:12px;color:var(--ink-faint);
+  display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.trace span{font-family:var(--mono);font-size:11px;background:var(--panel-2);
+  border:1px solid var(--line);padding:1px 6px;border-radius:999px;color:var(--ink-dim)}
+/* An answer with no tool behind it is an opinion, and the only thing marking
+   it as one was the absence of the "computed by" row -- a missing thing, which
+   nobody notices. Grey, because grey is the colour of nothing computed. */
+.trace span.uncomputed{font-family:var(--sans);color:var(--ink-faint);
+  border-style:dashed;background:none}
+
+/* An answer is written prose, so it is rendered as prose. The model emits
+   light markdown; pre-wrap printed the asterisks. */
+.msg .body.md{white-space:normal}
+.msg .body.md p{margin:0 0 7px}
+.msg .body.md p:last-child{margin-bottom:0}
+.msg .body.md strong{color:var(--ink);font-weight:650}
+.msg .body.md em{color:var(--ink-dim);font-style:italic}
+.msg .body.md code{font-family:var(--mono);font-size:12px;background:var(--panel-2);
+  border:1px solid var(--line);border-radius:3px;padding:0 4px}
+.msg .body.md h4{margin:14px 0 4px;font-size:11px;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--blue)}
+.msg .body.md h4:first-child{margin-top:0}
+.msg .body.md ul{margin:0 0 8px;padding-left:18px}
+.msg .body.md li{margin:2px 0}
+
+/* Which turn the workspace belongs to. Without it you scroll the chat and
+   lose track of what the right-hand pane is showing. */
+.msg.showing .body{border-left:2px solid var(--accent);padding-left:9px}
+.msg.showing.you .body{padding-left:12px}
+.evidence-btn{margin-left:auto;padding:2px 9px;font:inherit;font-size:11px;
+  color:var(--ink-dim);background:var(--panel-2);
+  border:1px solid var(--line-2);border-radius:999px;cursor:pointer}
+.evidence-btn:hover{color:var(--ink);border-color:var(--accent)}
+.msg.showing .evidence-btn{color:var(--accent);border-color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 10%,transparent)}
+
+/* A rule id is precise and, at 6 a.m., opaque. The tag carries the id so it
+   can be quoted, and the tooltip carries the sentence so it can be
+   understood. Both, always -- never one instead of the other. */
+.rule-tag{display:inline-flex;align-items:center;margin:0 3px;padding:1px 5px;
+  border:1px solid color-mix(in srgb,var(--blue) 65%,var(--line));
+  border-radius:4px;background:color-mix(in srgb,var(--blue) 7%,var(--bg));
+  color:var(--blue);font:600 10.5px/1.35 var(--mono);white-space:nowrap;cursor:help}
+.rule-tag:first-child{margin-left:0}
+.rule-tag.bad{border-color:color-mix(in srgb,var(--red) 65%,var(--line));
+  background:color-mix(in srgb,var(--red) 7%,var(--bg));color:var(--red)}
+.rule-tag.warn{border-color:color-mix(in srgb,var(--warn) 65%,var(--line));
+  background:color-mix(in srgb,var(--warn) 7%,var(--bg));color:var(--warn)}
+.rule-tag.ok{border-color:color-mix(in srgb,var(--green) 55%,var(--line));
+  background:color-mix(in srgb,var(--green) 6%,var(--bg));color:var(--green)}
+.rule-tooltip{position:fixed;z-index:100;width:max-content;
+  max-width:min(300px,calc(100vw - 16px));padding:6px 8px;
+  border:1px solid var(--line-2);border-radius:4px;
+  background:var(--ink);color:var(--bg);box-shadow:0 5px 18px rgba(0,0,0,.24);
+  font-size:11.5px;line-height:1.4;pointer-events:none}
+.reason-line{display:block}
+
+/* Detail on demand. A panel states its finding; the rows behind it open when
+   the controller wants to challenge it, and stay shut when they do not. */
+details.more{border-top:1px solid var(--line)}
+details.more:first-child{border-top:none}
+details.more > summary{padding:7px 12px;background:#12171e;font-size:12px;
+  cursor:pointer;display:flex;gap:8px;align-items:baseline;list-style:none}
+details.more > summary::-webkit-details-marker{display:none}
+details.more > summary::before{content:'▸';color:var(--ink-faint);font-size:10px}
+details.more[open] > summary::before{content:'▾'}
+details.more > summary b{font-weight:650}
+details.more > summary .why{color:var(--ink-dim)}
+details.more > summary:hover{background:#161c25}
+details.more > summary .count{margin-left:auto;color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+/* A fold that stands on its own in the workspace is still a panel, so it wears
+   the panel's chrome. Without it the joint plan's two ranked covers read as two
+   stray lines of text under the plan they belong to. */
+details.more.standalone{background:var(--panel);border:1px solid var(--line);
+  border-radius:5px;margin-bottom:14px;overflow:hidden}
+details.more.standalone > summary{padding:9px 12px;background:var(--panel-2);
+  border-bottom:1px solid transparent}
+details.more.standalone[open] > summary{border-bottom-color:var(--line)}
+details.more.standalone > summary b{font-size:12px;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink-dim)}
+details.more.standalone .panel{border:none;border-radius:0;margin-bottom:0}
+details.more.standalone .panel + .panel{border-top:1px solid var(--line)}
+/* The summary line already is this panel's title. Printing it again directly
+   under itself is the same words twice, four pixels apart. */
+details.more.standalone .panel:first-child > h3{display:none}
+
+/* A drill-down replaces the workspace, so there has to be a way back. */
+.backbar{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+.backbtn{background:var(--panel-2);border:1px solid var(--line);color:var(--ink-dim);
+  font:inherit;font-size:12px;cursor:pointer;border-radius:3px;padding:3px 9px}
+.backbtn:hover{border-color:var(--blue);color:var(--ink)}
+.crumb{font-size:12px;color:var(--ink-faint)}
+.composer{border-top:1px solid var(--line);padding:10px 12px;display:flex;gap:8px;background:var(--panel)}
+.composer textarea{
+  flex:1;resize:none;min-height:54px;max-height:140px;padding:9px 10px;
+  background:#0b0f14;color:var(--ink);border:1px solid var(--line);border-radius:4px;
+  font:14px/1.4 var(--sans);
+}
+.composer button{
+  min-height:54px;min-width:64px;padding:0 14px;border:1px solid var(--line);border-radius:4px;
+  background:var(--panel-2);color:var(--ink);font:600 13px var(--sans);cursor:pointer;
+}
+.composer button:hover:not(:disabled){background:#243040;border-color:var(--blue)}
+.composer button:disabled{opacity:.5;cursor:not-allowed}
+/* The starters open the conversation rather than trailing it, so they sit at
+   the top of an empty log and disappear once it is no longer empty. */
+.intro h2{margin:0 0 6px;font-size:17px;font-weight:650}
+.intro p{margin:0 0 4px;color:var(--ink-dim);font-size:13px;line-height:1.5}
+.starters{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.starters button{
+  font:13px var(--sans);color:var(--ink-dim);background:var(--panel-2);
+  border:1px solid var(--line);border-radius:5px;padding:9px 11px;cursor:pointer;
+  text-align:left;min-height:38px;display:flex;align-items:center;gap:9px;
+}
+.starters button:hover{color:var(--ink);border-color:var(--blue)}
+.starters .tier{font:600 10px var(--mono);border:1px solid currentColor;
+  border-radius:999px;padding:0 6px;margin-left:auto;flex:none}
+.composer-hint{display:flex;align-items:center;gap:10px;padding:0 12px 10px;
+  font-size:11.5px;color:var(--ink-faint);background:var(--panel)}
+.linkish{margin-left:auto;background:none;border:none;color:var(--ink-faint);
+  font:inherit;cursor:pointer;text-decoration:underline;padding:0}
+.linkish:hover{color:var(--ink-dim)}
+
+/* --- workspace ----------------------------------------------------------- */
+.work{overflow-y:auto;padding:16px 18px 40px;min-height:0}
+.work-head{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
+.work-head h2{margin:0;font-size:13px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-dim)}
+.work-head .hint{font-size:12px;color:var(--ink-faint)}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:5px;margin-bottom:14px;overflow:hidden}
+.panel > h3{
+  margin:0;padding:9px 12px;font-size:12px;font-weight:650;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink-dim);background:var(--panel-2);
+  border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:8px;
+}
+.panel > h3 .of{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink-faint);text-transform:none;letter-spacing:0}
+.panel .pad{padding:12px}
+.panel .note{padding:8px 12px;font-size:12px;color:var(--ink-faint);border-top:1px solid var(--line);background:#12171e}
+
+/* RHYTHM 2: a ranked plan, a timeline and a comparison are genuinely different
+   shapes, so they get different treatments -- table, rail, card grid -- while
+   sharing one panel chrome, type scale and palette. */
+
+/* tables: the deciding field comes early, never Name/Status/Date/Actions */
+.tw{overflow-x:auto}                     /* wide content scrolls inside itself */
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);
+   font-weight:600;background:var(--panel-2);position:sticky;top:0}
+tbody tr:hover{background:#1a212a}
+tbody tr.pick{background:#1d2430}
+tbody tr.pick td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+td.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+/* A reason is a sentence, and a sentence in a nowrap cell is a sentence with
+   its end cut off. Only this column wraps: the rest are ids and figures, which
+   are worse broken over two lines than scrolled to. */
+td.wrap{white-space:normal;min-width:26ch}
+/* Rows the answer named. The reply says "DX401, DX402, DX588, DX589" and the
+   controller should not have to hunt for them in 147 rows. */
+tbody tr.named td:first-child{box-shadow:inset 3px 0 0 var(--blue)}
+td .named-mark{font:600 10px var(--mono);color:var(--blue);margin-left:6px}
+td.cost{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent);font-weight:600}
+tr.dim td{color:var(--ink-dim)}
+/* The seven rules, named, under the row the controller is about to act on.
+   "Legal on all seven rules" is a claim; seven green chips are the evidence,
+   and v1 was right that this is what makes the deterministic engine visible
+   without a click. Row 1 only -- repeated down the table it is wallpaper.
+
+   The amber edge carries down from the row above, because the recommendation
+   and its checks are one block, not a row and a loose strip under it. */
+tbody tr.checks:hover{background:none}
+tr.checks td{padding:0 10px 8px;background:#1d2430;white-space:normal;
+  box-shadow:inset 3px 0 0 var(--accent)}
+tr.checks .k{font-size:10px;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--ink-faint);margin-right:7px}
+.rowbtn{background:none;border:none;color:var(--blue);font:inherit;cursor:pointer;padding:0;text-align:left}
+.rowbtn:hover{text-decoration:underline}
+
+.tag{display:inline-block;font:600 11px var(--mono);padding:1px 6px;border-radius:3px;
+     border:1px solid;letter-spacing:.02em}
+.tag.legal{color:var(--green);border-color:#2c5c46;background:#12241c}
+.tag.illegal{color:var(--red);border-color:#5c2c2c;background:#241212}
+.tag.info{color:var(--blue);border-color:#28455f;background:#111d28}
+.tag.warn{color:var(--accent);border-color:#5c4a17;background:#241d0c}
+
+/* the headline figure: one per panel, never a row of invented stats */
+.headline{display:flex;flex-wrap:wrap;gap:22px;padding:12px}
+.headline .fig{min-width:110px}
+.headline .fig .k{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint)}
+.headline .fig .v{font:600 20px/1.2 var(--mono);font-variant-numeric:tabular-nums;margin-top:2px}
+.headline .fig .v.accent{color:var(--accent)}
+.headline .fig .v.bad{color:var(--red)}
+.headline .fig .v.good{color:var(--green)}
+.headline .fig .s{font-size:12px;color:var(--ink-dim);margin-top:2px}
+
+/* duty timeline: a rail per day, with the rest gap between days called out.
+   Reason: "qualified, based, free and still illegal" is a statement about the
+   gaps, so the gaps get the emphasis, not the duties. */
+.rail{padding:6px 12px 12px}
+.day{display:grid;grid-template-columns:78px 1fr;gap:10px;padding:7px 0;align-items:start}
+.day .d{font-family:var(--mono);font-size:12px;color:var(--ink-dim);padding-top:2px}
+.day .bar{border-left:3px solid var(--blue);padding:2px 0 2px 9px}
+.day.proposed .bar{border-left-color:var(--accent)}
+.day.breach .bar{border-left-color:var(--red)}
+.day .t{font-family:var(--mono);font-size:12px}
+.day .m{font-size:12px;color:var(--ink-dim);margin-top:2px}
+.gap{display:grid;grid-template-columns:78px 1fr;gap:10px;font-size:12px}
+.gap .g{grid-column:2;color:var(--ink-dim);border-left:1px dashed var(--line);padding:3px 0 3px 9px;margin-left:1px}
+.gap.short .g{color:var(--red);border-left-color:var(--red)}
+
+/* exclusions: visible and grouped, not collapsed at the bottom. They are what a
+   controller most wants to challenge. */
+/* Flight numbers as chips. A row of DX412 DX413 DX588 is scannable; the same
+   thing as "DX412-2026-09-15, DX413-2026-09-15, DX588-2026-09-15" is a string. */
+.legs{display:flex;flex-wrap:wrap;gap:5px;padding:0 12px 12px}
+.leg{font-family:var(--mono);font-size:11.5px;padding:2px 7px;border-radius:4px;
+  background:var(--panel-2);border:1px solid var(--line);color:var(--ink-dim)}
+
+details.more ul{margin:0;padding:6px 12px 10px 28px;font-size:12px;color:var(--ink-dim)}
+.excl-list{list-style:none;padding:6px 12px 10px!important}
+.excl-list li{display:flex;gap:8px;align-items:baseline;padding:4px 0;
+  border-top:1px solid var(--line);font-family:var(--sans);font-size:12.5px}
+.excl-list li:first-child{border-top:none}
+.excl-list li strong{font-family:var(--mono);color:var(--ink);min-width:64px}
+details.more li{margin:3px 0;font-family:var(--mono);font-size:11.5px}
+details.more li .reason-line{font-family:var(--sans);font-size:12px}
+
+/* states are designed, not afterthoughts */
+.state{padding:26px 18px;text-align:center;color:var(--ink-dim)}
+.state h4{margin:0 0 5px;font-size:14px;color:var(--ink)}
+.state p{margin:0;font-size:13px;max-width:46ch;margin-inline:auto}
+.state.err h4{color:var(--red)}
+.claims{padding:10px 12px;border-top:1px solid var(--line);background:#12171e}
+.claims .k{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:5px}
+.claims li{font-size:12px;color:var(--ink-dim);margin:2px 0;list-style:none}
+.claims li code{font-family:var(--mono);font-size:11px;color:var(--blue);margin-right:6px}
+.claims ul{margin:0;padding:0}
+pre.draft{margin:0;padding:12px;font-family:var(--mono);font-size:12.5px;white-space:pre-wrap;color:var(--ink)}
+</style>
+</head>
+<body>
+<!-- One bar across the top, not one per pane. The status belongs to the whole
+     desk, and squeezed into a 420px column the title wrapped onto three lines. -->
+<header class="bar">
+  <span class="dot off" id="dot"></span>
+  <h1>Crew Ops Advisor</h1>
+  <span class="sub">DX network</span>
+  <span class="bar-spacer"></span>
+  <button id="boundary" class="ghost" type="button"
+          title="Show the system prompt and the tool surface">boundary</button>
+  <button id="flow" class="ghost" type="button"
+          title="Show how one question becomes an answer">flow</button>
+  <button id="brief" class="ghost devonly" type="button"
+          title="The technical and agentic boundary, for presenting">briefing</button>
+  <label class="toggle" title="Show the presentation briefing and tool tiers">
+    <input type="checkbox" id="devview"> dev view
+  </label>
+  <span class="status" id="status">checking…</span>
+</header>
+
+<div class="app">
+  <section class="chat">
+    <div class="log" id="log" aria-live="polite">
+      <div class="intro" id="intro">
+        <h2>What's happened?</h2>
+        <p>Ask in plain English. Every figure comes from the deterministic engine:
+           the model chooses which checks to run and explains the result, it never
+           calculates.</p>
+      </div>
+      <div class="starters" id="starters"></div>
+    </div>
+    <form class="composer" id="composer">
+      <textarea id="input" rows="1" placeholder="Captain C-1042 is sick for P-2291 — what should I do?"
+        aria-label="Ask the crew ops advisor"></textarea>
+      <button type="submit" id="send">Send</button>
+    </form>
+    <div class="composer-hint">
+      <span>Enter to send · Shift+Enter for a new line</span>
+      <button type="button" id="clear" class="linkish">Clear conversation</button>
+    </div>
+  </section>
+
+  <section class="work" id="work" aria-label="Operational workspace">
+    <div class="work-head">
+      <h2>Workspace</h2>
+      <span class="hint" id="workhint">Every figure here was computed by the rules engine.</span>
+    </div>
+    <div id="panels"></div>
+  </section>
+</div>
+
+<script>
+/* ---------------------------------------------------------------------------
+   INVARIANTS
+
+   1. Panels render only from a tool result's `data`. Nothing is parsed out of
+      the model's prose, so the chat and the workspace cannot disagree.
+   2. Layout is deterministic: the tool that ran decides the panel, never the
+      model. The same question type always produces the same screen shape.
+   3. Drill-downs call /api/tool directly, so the workspace works with the model
+      switched off.
+   4. A turn that draws no panel leaves the workspace alone. Clearing before
+      knowing there is a replacement blanks the plan someone is reading.
+--------------------------------------------------------------------------- */
+const $ = s => document.querySelector(s);
+const el = (t, c, txt) => { const n = document.createElement(t); if(c) n.className = c;
+  if(txt !== undefined) n.textContent = txt; return n; };
+const esc = s => String(s ?? '');
+const inr = n => 'INR ' + Number(n).toLocaleString('en-IN');
+const hhmm = iso => typeof iso === 'string' && iso.length >= 16 ? iso.slice(11,16)+'Z' : esc(iso);
+const dayOf = iso => typeof iso === 'string' ? iso.slice(0,10) : '';
+
+/* A flight id is DX412-2026-09-15. The date in it is always already on screen
+   -- as the row label, the column beside it, or the panel title -- so what is
+   left to read is DX412. Everywhere ids are shown, they are shown this way. */
+const legNo = id => String(id ?? '').split('-')[0];
+const isFlightId = v => typeof v === 'string' && /^[A-Z]{2}\d+-\d{4}-\d{2}-\d{2}$/.test(v);
+
+/* An on-call window is an object, which is why the table dropped it. It is
+   also the column Q01 asked for. Shaped {start,end} or {start_utc,end_utc}. */
+function windowText(v){
+  if(!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const s = v.start ?? v.start_utc, e = v.end ?? v.end_utc;
+  if(s == null || e == null) return null;
+  return String(s) + '–' + String(e) + 'Z';
+}
+
+/* One grouping, both panes. The table has always used Indian grouping because
+   the currency is INR; the model writes 1,500,000 and side by side that reads
+   as a bug. Only an already-grouped number is touched, so dates, rule ids and
+   crew ids are untouched by construction. */
+const inrGroups = s => String(s ?? '').replace(/\b\d{1,3}(?:,\d{3})+\b/g,
+  m => Number(m.replace(/,/g,'')).toLocaleString('en-IN'));
+
+let modelReady = false;
+
+/* One id per page load, so the desk can key a conversation by it. Generated
+   here and sent as a header; nothing else about the call changes. */
+const DESK_SESSION = (() => {
+  try{ if(crypto && crypto.randomUUID) return crypto.randomUUID(); }catch(e){}
+  return 'desk-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+})();
+
+/* --- api ---------------------------------------------------------------- */
+async function api(path, body){
+  const headers = {'Content-Type':'application/json'};
+  // The conversation is what is keyed, so the header rides the two endpoints
+  // that carry one. /api/tool is stateless and is left exactly as it was.
+  if(path === '/api/chat' || path === '/api/reset') headers['X-Desk-Session'] = DESK_SESSION;
+  const r = await fetch(path, {method:'POST', headers, body:JSON.stringify(body)});
+  const j = await r.json().catch(() => ({error:'bad response'}));
+  if(!r.ok) throw Object.assign(new Error(j.error || 'request failed'), {detail:j.detail, hint:j.hint});
+  return j;
+}
+const runTool = (name, args) => api('/api/tool', {name, arguments: args || {}});
+
+async function getJSON(path){
+  const r = await fetch(path);
+  if(!r.ok) throw new Error('GET ' + path + ' failed: ' + r.status);
+  return r.json();
+}
+
+/* --- rule ids, in both forms -------------------------------------------
+
+   A controller knows the rules, but a rule id is still an opaque token on a
+   screen at 6 a.m. The tag shows the id, so it can be quoted into a phone
+   call; the tooltip shows the sentence, so it can be understood. The gloss
+   is deliberately shorter than rules.json's own text, because a tooltip that
+   needs reading twice is a tooltip nobody reads. */
+const RULE_GLOSS = {
+  'RULE-FDP-01':  'max duty period 13h, less 30 min per sector beyond the 2nd',
+  'RULE-DUTY-02': 'max 60 duty hours in any 7 days',
+  'RULE-FLT-03':  'max 100 flight hours in any 28 days',
+  'RULE-REST-04': 'min 12h rest between duties',
+  'RULE-QUAL-05': 'must be rated for the aircraft type',
+  'RULE-CERT-06': 'all certifications valid on the duty date',
+  'RULE-BASE-07': 'callout from own base, else deadhead positioning',
+  'DOUBLE-BOOKED':'already flying at that time',
+};
+const gloss = r => RULE_GLOSS[r] || '';
+
+/* The word for a rule when it is being counted rather than quoted: "8 aircraft
+   rating", not "8 qual". These are the engine's own words from its orientation
+   string, kept here so the panel that summarises exclusions and the figure that
+   counts them cannot end up in two vocabularies. */
+const RULE_WORD = {
+  'RULE-FDP-01':  'duty period',
+  'RULE-DUTY-02': 'duty hours',
+  'RULE-FLT-03':  'block hours',
+  'RULE-REST-04': 'rest',
+  'RULE-QUAL-05': 'aircraft rating',
+  'RULE-CERT-06': 'certification',
+  'RULE-BASE-07': 'base / on-call window',
+};
+
+function hideRuleTooltip(){ const t = $('#rule-tooltip'); if(t) t.remove(); }
+
+function showRuleTooltip(tag){
+  const text = tag.dataset.tooltip; if(!text) return;
+  hideRuleTooltip();
+  const tip = el('div','rule-tooltip', text);
+  tip.id = 'rule-tooltip';
+  tip.setAttribute('role','tooltip');
+  document.body.appendChild(tip);
+  // Keep it on screen: below the tag if it fits, above if it does not.
+  const a = tag.getBoundingClientRect(), b = tip.getBoundingClientRect();
+  tip.style.left = Math.max(8, Math.min(a.left, window.innerWidth - b.width - 8)) + 'px';
+  tip.style.top = (a.bottom + 7 + b.height <= window.innerHeight - 8
+    ? a.bottom + 7 : Math.max(8, a.top - b.height - 7)) + 'px';
+}
+
+function ruleTag(rule, tone){
+  const tag = el('span','rule-tag' + (tone ? ' ' + tone : ''), rule);
+  const text = gloss(rule);
+  if(!text) return tag;
+  tag.dataset.tooltip = text;
+  tag.tabIndex = 0;
+  tag.setAttribute('aria-label', rule + ': ' + text);
+  tag.addEventListener('mouseenter', () => showRuleTooltip(tag));
+  tag.addEventListener('mouseleave', hideRuleTooltip);
+  tag.addEventListener('focus', () => showRuleTooltip(tag));
+  tag.addEventListener('blur', hideRuleTooltip);
+  return tag;
+}
+
+/* A reason reads "C-2087 — RULE-DUTY-02: 61.33h exceeds 60h". Split on the
+   rule ids so each becomes a tag with its gloss, and the numbers around it
+   stay plain text. Multiple findings are joined with "; " by the engine and
+   are put on their own lines here, because two reasons in one line read as
+   one reason. */
+/* "only -6.75h rest before COVER" is what the answer keys contain, so the
+   engine says exactly that and the scoreboard checks it byte for byte. A
+   negative rest figure is still not a thing anyone says out loud, and it reads
+   as a bug, so the wording is softened here at the point of display and
+   nowhere else. Same fact, same numbers, human phrasing. */
+function humanise(finding){
+  return String(finding).replace(
+    /only -([\d.]+)h rest before (\S+)/,
+    (_, h, next) => `overlaps ${next} by ${h}h`);
+}
+
+function reasonWithRules(node, reason, tone){
+  String(reason || '').split(/;\s+/).filter(Boolean).map(humanise).forEach(finding => {
+    const line = el('span','reason-line');
+    finding.split(/(RULE-[A-Z]+-\d+|DOUBLE-BOOKED)/g).forEach(part => {
+      if(!part) return;
+      if(gloss(part)) line.appendChild(ruleTag(part, tone || 'bad'));
+      else line.appendChild(document.createTextNode(part));
+    });
+    node.appendChild(line);
+  });
+  return node;
+}
+
+/* Detail on demand: a <details> that is shut by default and says how much it
+   is hiding, so nothing is concealed, only folded. */
+function more(headline, count, build, opts){
+  const d = el('details','more');
+  if(opts && opts.open) d.open = true;
+  const s = el('summary');
+  if(headline instanceof Node) s.appendChild(headline);
+  else s.appendChild(el('b', null, headline));
+  if(opts && opts.why) s.appendChild(el('span','why', opts.why));
+  if(count) s.appendChild(el('span','count', count));
+  d.appendChild(s);
+  d.appendChild(build());
+  return d;
+}
+
+/* --- the boundary, shown rather than described ---------------------------
+
+   The claim the whole product rests on is that the model never computes a
+   figure. That is not something a controller should have to take on trust,
+   so both halves are on screen: the entire system prompt the model is
+   working under, and every tool it is allowed to call. Both are fetched
+   live from the running server, so they cannot drift from what is actually running. */
+const TOOL_TIER = {
+  lookup: 1, crew_profile: 1, earliest_next_report: 1,
+  trace_disruption: 2, check_assignment: 2, duty_timeline: 2,
+  simulate_disruption: 2, validate: 2,
+  resolve_cover: 3, draft_notification: 3,
+};
+
+function modal(title, build, cls){
+  const overlay = el('div','modal');
+  overlay.addEventListener('click', e => { if(e.target === overlay) close(); });
+  const card = el('div','modal-card' + (cls ? ' ' + cls : ''));
+  const head = el('header');
+  head.appendChild(el('h3', null, title));
+  const x = el('button','ghost','close');
+  x.type = 'button';
+  head.appendChild(x);
+  card.appendChild(head);
+  const body = el('div','body');
+  body.appendChild(build());
+  card.appendChild(body);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+
+  function close(){ overlay.remove(); document.removeEventListener('keydown', esc); }
+  function esc(e){ if(e.key === 'Escape') close(); }
+  x.addEventListener('click', close);
+  document.addEventListener('keydown', esc);
+  x.focus();
+  return overlay;
+}
+
+async function showBoundary(){
+  const [prompt, tools] = await Promise.all([
+    getJSON('/api/prompt'), getJSON('/api/tools')
+  ]);
+  modal('The LLM / deterministic boundary', () => {
+    const wrap = el('div');
+    wrap.appendChild(el('p','muted',
+      'The model requests a tool, Python computes, and the claim gate withholds ' +
+      'any figure no tool returned. The prompt on the left is instruction, not ' +
+      'enforcement: what actually holds is that no tool below accepts a cost or ' +
+      'a verdict as an argument, and that the gate runs on every reply.'));
+    const grid = el('div','boundary-grid');
+
+    const left = el('div');
+    left.appendChild(el('h4', null,
+      'Model instructions, not enforcement — ' + (prompt.model || 'no model configured')));
+    left.appendChild(el('pre', null, prompt.system_prompt || '(no model configured)'));
+    grid.appendChild(left);
+
+    const right = el('div');
+    right.appendChild(el('h4', null,
+      'Enforced in code: the tool surface — ' + tools.length + ' tools'));
+    right.appendChild(el('p','muted',
+      'T1 lookup · T2 consequence · T3 recommendation. A starred argument is ' +
+      'required. None of them takes a cost, a count or a verdict.'));
+    const ul = el('ul','toolist');
+    tools.forEach(t => {
+      const req = t.parameters.required || [];
+      const args = Object.keys(t.parameters.properties || {})
+        .map(k => req.includes(k) ? k + '*' : k).join(', ');
+      const li = el('li');
+      li.appendChild(el('code', null, t.name + '(' + args + ')'));
+      const tier = TOOL_TIER[t.name];
+      if(tier) li.appendChild(el('span','tier t' + tier, 'T' + tier));
+      li.appendChild(el('div','desc', String(t.description || '').split('. ')[0] + '.'));
+      ul.appendChild(li);
+    });
+    right.appendChild(ul);
+    grid.appendChild(right);
+
+    wrap.appendChild(grid);
+    return wrap;
+  });
+}
+
+/* --- the same boundary, as one picture ---------------------------------- */
+function showFlow(){
+  const BOX = (x, y, w, h, title, sub, tone) => `
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6"
+          fill="var(--flow-${tone}-bg)" stroke="var(--flow-${tone})"/>
+    <text x="${x + 14}" y="${y + 22}" class="t">${title}</text>
+    ${sub ? `<text x="${x + 14}" y="${y + 40}" class="s">${sub}</text>` : ''}`;
+
+  modal('One question, end to end', () => {
+    const wrap = el('div');
+    wrap.appendChild(el('p','muted',
+      'Everything on the left is a choice the model makes. Everything on the ' +
+      'right is arithmetic it cannot reach. A figure crosses back only as part ' +
+      'of a computed result, and the gate checks that it did.'));
+
+    const box = el('div','flow-wrap');
+    box.innerHTML = `
+<svg viewBox="0 0 900 540" width="100%" style="min-width:760px" role="img"
+     aria-label="How a controller question becomes a grounded answer">
+  <style>
+    svg { --flow-model:#4c9aff; --flow-model-bg:#111d2b;
+          --flow-engine:#3fb950; --flow-engine-bg:#0f1f16;
+          --flow-gate:#f0b429;  --flow-gate-bg:#241d0c;
+          --flow-out:#a371f7;   --flow-out-bg:#1b1428; }
+    .t { fill:#e6ebf2; font:600 13px system-ui,sans-serif }
+    .s { fill:#9aa7b8; font:11.5px system-ui,sans-serif }
+    .lbl { fill:#6b7889; font:11px ui-monospace,monospace }
+    .hd { fill:#9aa7b8; font:600 11px system-ui,sans-serif; letter-spacing:.08em }
+    .ln { stroke:#4c9aff; stroke-width:1.5; fill:none; marker-end:url(#a) }
+    .ln.back { stroke:#6b7889; stroke-dasharray:4 3 }
+    .ln.bad { stroke:#f85149 }
+    .ln.good { stroke:#3fb950 }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6"
+            markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker>
+  </defs>
+
+  <line x1="450" y1="30" x2="450" y2="520" stroke="#333c4a" stroke-dasharray="6 5"/>
+  <text x="225" y="22" class="hd" text-anchor="middle">THE MODEL DECIDES</text>
+  <text x="675" y="22" class="hd" text-anchor="middle">PYTHON COMPUTES</text>
+
+  ${BOX(40, 40, 370, 46, 'Controller question', '&#8220;C-1042 is sick for P-2291&#8221;', 'model')}
+  ${BOX(40, 130, 370, 62, 'Model picks a tool and its arguments', 'the one genuinely open choice', 'model')}
+  ${BOX(490, 130, 370, 62, 'dispatch &#8594; engine', 'rules, costing, ranking, search', 'engine')}
+  ${BOX(490, 230, 370, 72, 'Result: summary, data, claims', 'every figure computed here, with an id', 'engine')}
+  ${BOX(40, 340, 370, 62, 'Model writes the answer', 'citing {{claim:c3}}, never a number of its own', 'model')}
+  ${BOX(490, 340, 370, 62, 'Claim gate', 'is every figure in this turn&#8217;s results?', 'gate')}
+  ${BOX(490, 440, 370, 56, 'Not grounded: one corrective turn', 'still ungrounded &#8594; the answer is withheld', 'gate')}
+  ${BOX(40, 440, 370, 56, 'Answer + workspace panels', 'both rendered from the same result', 'out')}
+
+  <path class="ln" d="M225,86 L225,130"/>
+  <path class="ln" d="M410,161 L490,161"/>
+  <path class="ln" d="M675,192 L675,230"/>
+  <path class="ln back" d="M490,266 C440,266 460,180 415,168"/>
+  <text x="430" y="300" class="lbl" text-anchor="middle">up to 8 rounds</text>
+  <path class="ln" d="M225,192 L225,340"/>
+  <path class="ln" d="M410,371 L490,371"/>
+  <path class="ln good" d="M490,392 C460,410 300,410 225,430"/>
+  <text x="300" y="424" class="lbl">grounded</text>
+  <path class="ln bad" d="M675,402 L675,440"/>
+</svg>`;
+    wrap.appendChild(box);
+
+    const legend = el('div','flow-legend');
+    [['#4c9aff','the model chooses'], ['#3fb950','Python computes'],
+     ['#f0b429','the gate checks'], ['#a371f7','what the controller sees']]
+      .forEach(([c, t]) => {
+        const s = el('span'); const i = el('i'); i.style.background = c;
+        s.appendChild(i); s.appendChild(document.createTextNode(t)); legend.appendChild(s);
+      });
+    wrap.appendChild(legend);
+    return wrap;
+  });
+}
+
+/* --- the briefing: one window that explains the whole system --------------
+
+   `boundary` shows the raw material and `flow` shows the shape. This is the
+   thing you talk from: what the product does, where the line between the
+   model and the engine sits, why it is drawn there, and what is measured.
+   Written for a judge who has three minutes and has not read the code. */
+function showBriefing(){
+  const sec = (title, build) => {
+    const s = el('section','brief-sec');
+    s.appendChild(el('h4', null, title));
+    s.appendChild(build());
+    return s;
+  };
+  const para = t => el('p', null, t);
+
+  modal('Crew Ops Advisor — technical briefing', () => {
+    const w = el('div','brief');
+
+    w.appendChild(sec('The problem', () => {
+      const d = el('div');
+      d.appendChild(para(
+        'A crew controller loses a crew member at 03:00 and has minutes to ' +
+        'decide. The question is never only "who can cover?" but "who can ' +
+        'legally cover, what does each option cost, and why is everyone else ' +
+        'out?" Seven rules, 150 crew, 39 pairings, one week of schedule.'));
+      return d;
+    }));
+
+    w.appendChild(sec('The architectural claim', () => {
+      const d = el('div');
+      d.appendChild(para(
+        'Deterministic Python computes every figure. The language model chooses ' +
+        'which question to ask and explains the result. It is never in a ' +
+        'position where it could calculate, because no tool accepts a cost or a ' +
+        'verdict as an argument and no tool lets it skip a rule. That is ' +
+        'enforced by a gate and by two tests, not by a line in a prompt.'));
+      const ul = el('ul');
+      [['The model owns', 'routing, ambiguity, follow-ups, which verdict was asked for, and the words'],
+       ['Python owns', 'duty accrual, rest, FDP, qualification, certification, base, cost, ranking, search'],
+       ['The gate', 'every figure in the answer must appear in this turn’s tool results, or the answer is withheld']]
+        .forEach(([k, v]) => {
+          const li = el('li');
+          li.appendChild(el('b', null, k + ': '));
+          li.appendChild(document.createTextNode(v));
+          ul.appendChild(li);
+        });
+      d.appendChild(ul);
+      return d;
+    }));
+
+    w.appendChild(sec('Why the line is drawn there', () => {
+      const d = el('div');
+      d.appendChild(para(
+        'A language model that is merely told not to calculate will still ' +
+        'calculate, and the failure is invisible: a plausible number in a ' +
+        'confident sentence. Early on, moving one steer out of a tool result ' +
+        'and into a prompt produced an invented INR 12,50,000 cancellation ' +
+        'cost. The fix was not a firmer instruction. It was removing the ' +
+        'opportunity, then testing that it stays removed.'));
+      d.appendChild(para(
+        'The dangerous case is not invention, though. It is a real number ' +
+        'attached to the wrong label, and a grounded wrong answer: when the ' +
+        'model hallucinated a 2025 date the closure returned zero flights and ' +
+        'it reported "0 flights affected", which was wrong and passed the gate. ' +
+        'Tools now refuse a date outside the schedule instead of returning an ' +
+        'empty result.'));
+      return d;
+    }));
+
+    w.appendChild(sec('What is measured', () => {
+      const d = el('div');
+      const t = el('table','brief-table');
+      t.innerHTML = '<thead><tr><th>Measurement</th><th>Result</th><th>How</th></tr></thead>';
+      const tb = el('tbody');
+      [['38 questions through the engine', '36/36 gradable', 'python -m aircrew.scoreboard'],
+       ['6 worked scenarios', '19/19 checks', 'same command'],
+       ['Agent loop and claim gate', '21/21', 'python -m tests.test_agent_loop'],
+       ['Workspace and chat pane', '119 checks', 'node tests/ui_check.js'],
+       ['38 questions through the agent', '35/36 re-scored, not re-run live', 'python -m aircrew.replay']]
+        .forEach(row => {
+          const tr = el('tr');
+          row.forEach((c, i) => tr.appendChild(el('td', i === 1 ? 'num' : null, c)));
+          tb.appendChild(tr);
+        });
+      t.appendChild(tb);
+      d.appendChild(t);
+      d.appendChild(para(
+        'Two of the 38 have rubrics for answer keys rather than values, so the ' +
+        'honest denominator is 36. Grading a rubric against itself is a fake pass.'));
+      return d;
+    }));
+
+    w.appendChild(sec('What it does not do', () => {
+      const d = el('div');
+      const ul = el('ul');
+      ['The gate matches figures, not meaning: a real number under the wrong label still passes.',
+       'Two of the seven rules never eliminate anybody in this dataset. The heaviest 28-day block is 79.28h against a 100h limit.',
+       'Positioning considers same-day nonstop deadheads only.',
+       'The agent number was re-scored from recorded calls, not re-run after the last fixes.']
+        .forEach(x => ul.appendChild(el('li', null, x)));
+      d.appendChild(ul);
+      return d;
+    }));
+
+    const foot = el('p','muted');
+    foot.appendChild(document.createTextNode('The '));
+    const b1 = el('button','ghost','boundary'); b1.type = 'button';
+    b1.addEventListener('click', () => { $('.modal').remove(); showBoundary(); });
+    foot.appendChild(b1);
+    foot.appendChild(document.createTextNode(' button shows the real prompt and tool surface; '));
+    const b2 = el('button','ghost','flow'); b2.type = 'button';
+    b2.addEventListener('click', () => { $('.modal').remove(); showFlow(); });
+    foot.appendChild(b2);
+    foot.appendChild(document.createTextNode(' draws the same thing as one picture.'));
+    w.appendChild(foot);
+    return w;
+  }, 'narrow');
+}
+
+/* --- chat log ----------------------------------------------------------- */
+
+/* The model writes light markdown -- bold for the figure it wants read first,
+   headings, the odd list. Printed raw, the controller reads asterisks. This
+   renders the subset the model actually emits and escapes everything else:
+   the text arrives from a language model, so it is never trusted as HTML. */
+function escapeHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderAnswer(text){
+  const wrap = el('div');
+  const inline = s => escapeHtml(s)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s.,;:)]|$)/g, '$1<em>$2</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
+  let list = null;
+
+  for(const raw of inrGroups(text).split('\n')){
+    const line = raw.replace(/\s+$/, '');
+    if(!line.trim()){ list = null; continue; }
+
+    // A heading is a line that is only a heading: "## Recovery plan", or a
+    // whole line wrapped in bold, which is how this model writes them.
+    const head = line.match(/^\s*#{1,6}\s+(.*)$/) ||
+                 line.match(/^\s*\*\*([^*]+)\*\*:?\s*$/);
+    if(head){ list = null; wrap.appendChild(el('h4', null, head[1].trim())); continue; }
+
+    const item = line.match(/^\s*[-*•]\s+(.*)$/) || line.match(/^\s*\d+[.)]\s+(.*)$/);
+    if(item){
+      if(!list){ list = el('ul'); wrap.appendChild(list); }
+      const li = el('li'); li.innerHTML = inline(item[1]); list.appendChild(li);
+      continue;
+    }
+    list = null;
+    const p = el('p'); p.innerHTML = inline(line); wrap.appendChild(p);
+  }
+  return wrap;
+}
+
+/* The opener earns its space only while the log is empty. Once the controller
+   has asked something, the conversation is the content. */
+function dismissIntro(){
+  const i = $('#intro'); if(i) i.remove();
+  const s = $('#starters'); if(s) s.remove();
+}
+
+function say(who, text, cls){
+  dismissIntro();
+  const m = el('div', 'msg ' + (cls || ''));
+  m.appendChild(el('div', 'who', who));
+  const body = el('div', 'body');
+  if(text instanceof Node){ body.className = 'body md'; body.appendChild(text); }
+  else body.textContent = text;
+  m.appendChild(body);
+  $('#log').appendChild(m);
+  $('#log').scrollTop = $('#log').scrollHeight;
+  return m;
+}
+function trace(m, calls){
+  const t = el('div','trace');
+  if(!calls || !calls.length){
+    // The only thing marking an uncomputed answer was the absence of this row,
+    // and an absence is not a cue. An opinion says it is one, in the same place
+    // the tool chips would have been.
+    t.appendChild(el('span','uncomputed','not computed — advisory opinion'));
+    m.appendChild(t);
+    return t;
+  }
+  t.appendChild(document.createTextNode('computed by '));
+  calls.forEach(c => t.appendChild(el('span', null, c.name)));
+  m.appendChild(t);
+  return t;
+}
+
+/* --- workspace ---------------------------------------------------------- */
+
+/* A drill-down ("why was this one ruled out?") replaces the whole workspace,
+   and the plan the controller was reading is gone. So a view knows where it
+   came from: `push` stacks, and Back returns. A new answer clears the stack,
+   because the trail belonged to the previous question. */
+let currentView = null;
+const viewStack = [];
+
+function paintView(){
+  if(!currentView) return;
+  const host = $('#panels'); host.textContent = '';
+  if(viewStack.length){
+    const bar = el('div','backbar');
+    const back = el('button','backbtn','← Back');
+    const to = viewStack[viewStack.length - 1].label;
+    back.type = 'button';
+    back.title = to ? 'Back to ' + to : 'Back to the previous view';
+    back.addEventListener('click', popPanels);
+    bar.appendChild(back);
+    if(currentView.label) bar.appendChild(el('span','crumb', currentView.label));
+    host.appendChild(bar);
+  }
+  currentView.nodes.forEach(n => host.appendChild(n));
+  $('#work').scrollTop = 0;
+}
+
+function setPanels(nodes, label){
+  // Invariant 4: only replace when there is something to replace with.
+  if(!nodes || !nodes.length) return;
+  viewStack.length = 0;
+  currentView = {nodes, label: label || ''};
+  paintView();
+}
+
+function pushPanels(nodes, label){
+  if(!nodes || !nodes.length) return;
+  if(currentView) viewStack.push(currentView);
+  currentView = {nodes, label: label || ''};
+  paintView();
+}
+
+/* The workspace saying, in its own words, that this turn produced nothing.
+   Leaving the previous question's panel up is the one failure the product
+   promises cannot happen: the prose and the evidence would disagree.
+
+   The title is a parameter because there is more than one kind of nothing;
+   `emptyState` below decides which one this turn is. */
+function clearPanels(head, body, title){
+  viewStack.length = 0;
+  const p = panel(title || 'Nothing computed for this question');
+  p.appendChild(stateBlock('', head, body));
+  currentView = {nodes: [p], label: ''};
+  paintView();
+}
+
+/* Two different nothings, and the copy for one is a lie about the other.
+
+   A turn where no tool ran is an opinion, and saying the answer came from the
+   conversation is exactly right. A turn where a tool ran and no panel knows its
+   shape is a computed answer that simply has no drawing -- and there the same
+   words put the workspace in direct contradiction with a chat footer reading
+   "computed by earliest_next_report", with the workspace as the liar. */
+function emptyState(r){
+  return (r.tool_results || []).length
+    ? ['Computed, not drawn',
+       'The engine answered this; the figure is in the reply. ' +
+       'This result has no workspace panel.',
+       'No panel for this result']
+    : ['No engine result for this question',
+       'This answer came from the conversation, not from a new computation. ' +
+       'The last workspace view is still reachable from its own answer.',
+       'Nothing computed for this question'];
+}
+
+function popPanels(){
+  if(!viewStack.length) return;
+  currentView = viewStack.pop();
+  paintView();
+}
+function panel(title, count){
+  const p = el('div','panel'); const h = el('h3', null, title);
+  if(count) h.appendChild(el('span','of', count));
+  p.appendChild(h); return p;
+}
+function stateBlock(kind, head, body){
+  const s = el('div','state ' + kind);
+  s.appendChild(el('h4', null, head));
+  s.appendChild(el('p', null, body));
+  return s;
+}
+/* What this result licenses the model to say. Two or three is orientation;
+   nine is a wall, and it is audit material rather than a finding, so past
+   three it folds. */
+function claimList(env){
+  if(!env.claims || !env.claims.length) return null;
+  const build = (from) => {
+    const ul = el('ul');
+    from.forEach(c => {
+      const li = el('li'); li.appendChild(el('code', null, c.id));
+      reasonWithRules(li, ' ' + c.text, 'ok');
+      ul.appendChild(li);
+    });
+    return ul;
+  };
+  const w = el('div','claims');
+  if(env.claims.length <= 3){
+    w.appendChild(el('div','k','Established by this result'));
+    w.appendChild(build(env.claims));
+    return w;
+  }
+  w.appendChild(more('Established by this result', env.claims.length + ' claims',
+                     () => build(env.claims.slice(0, 12))));
+  return w;
+}
+/* What this result does not establish. Written for a controller, so anything
+   that names an internal payload path is dropped: "they are in data.exclusions"
+   sits directly above a panel titled "Why the others were ruled out", which is
+   the same information said twice, once in JSON. */
+function missingNote(env, drop){
+  const items = (env.missing || []).filter(m =>
+    !/data\.[a-z_]+/i.test(m) && !(drop || []).some(d => m.includes(d)));
+  if(!items.length) return null;
+  return el('div','note', 'Not established here: ' + items.join('; '));
+}
+
+/* --- panel builders, one per tool. The tool decides; the model does not. -- */
+/* A rule id means nothing on its own, so it always travels with its text. The
+   text comes from rules.json via the tool result, never from a table here. */
+
+function pResolve(env){
+  const d = env.data, out = [];
+  const p = panel('Ranked cover — ' + esc(d.pairing_id) + ' ' + esc(d.role),
+                  (d.option_count || d.options.length) + ' options');
+  const head = el('div','headline');
+  const fig = (k,v,s,cls) => { const f = el('div','fig');
+    f.appendChild(el('div','k',k)); const val = el('div','v ' + (cls||''), v);
+    f.appendChild(val); if(s) f.appendChild(el('div','s',s)); head.appendChild(f); };
+  const rec = d.recommended;
+  if(rec) fig('Recommended', rec.crew_id || 'Cancel', rec.action, 'accent');
+  if(rec) fig('Cost', inr(rec.cost_inr), rec.delay_hours ? rec.delay_hours + 'h delay' : 'no delay', 'accent');
+  fig('Legal candidates', d.legal_candidate_count, 'of ' + (d.legal_candidate_count + d.excluded_count) + ' considered');
+  fig('Excluded', d.excluded_count, d.exclusions_orientation);
+  p.appendChild(head);
+
+  if(!d.options.length){
+    p.appendChild(stateBlock('', 'No candidates match',
+      'Nobody holds the rating, base and legality for this pairing. Widen the base filter to allow positioning, or check the on-call windows for the report time.'));
+  } else {
+    // Deciding field first: what it costs and whether it is legal, then who.
+    const tw = el('div','tw'), t = el('table');
+    t.innerHTML = '<thead><tr><th>#</th><th>Cost</th><th>Status</th><th>Action</th>' +
+                  '<th>Base</th><th>Delay</th><th></th></tr></thead>';
+    const tb = el('tbody');
+    d.options.forEach(o => {
+      const tr = el('tr'); if(o.rank === 1) tr.className = 'pick';
+      if(!o.crew_id) tr.className += ' dim';
+      tr.appendChild(el('td','num', o.rank));
+      tr.appendChild(el('td','cost', inr(o.cost_inr)));
+      // Cancellation is not a legal candidate, it is what is left when there
+      // is none. Badging it "legal" made six rows read as six legal options
+      // against a headline that correctly said five.
+      const tg = el('td');
+      const tag = !o.crew_id ? el('span','tag warn','fallback')
+                : el('span','tag ' + (o.legal ? 'legal':'illegal'), o.legal ? 'legal':'illegal');
+      tg.appendChild(tag); tr.appendChild(tg);
+      tr.appendChild(el('td', null, o.action));
+      tr.appendChild(el('td', null, o.base || '—'));
+      tr.appendChild(el('td','num', o.delay_hours ? o.delay_hours + 'h' : '—'));
+      const act = el('td');
+      if(o.crew_id){
+        const b = el('button','rowbtn','why');   // drill-down: calls the tool itself
+        b.type = 'button';
+        b.addEventListener('click', () => drill(o.crew_id, d.pairing_id, d.from_date));
+        act.appendChild(b);
+      }
+      tr.appendChild(act); tb.appendChild(tr);
+      // v1 named the seven rules as chips under the recommended row, and that
+      // is what makes "legal on all seven rules" readable without opening
+      // anything. Row 1 only: repeated down the table it is wallpaper, and the
+      // rows below already carry a legal/illegal badge.
+      if(o.rank === 1 && o.legal && (o.rules_checked || []).length){
+        const cr = el('tr','checks');
+        const cell = el('td');
+        cell.colSpan = 7;
+        cell.appendChild(el('span','k','checks'));
+        o.rules_checked.forEach(r => cell.appendChild(ruleTag(r, 'ok')));
+        cr.appendChild(cell); tb.appendChild(cr);
+      }
+    });
+    t.appendChild(tb); tw.appendChild(t); p.appendChild(tw);
+  }
+  const mn = missingNote(env, d.exclusions && d.exclusions.length ? ['excluded'] : []);
+  if(mn) p.appendChild(mn);
+  const cl = claimList(env); if(cl) p.appendChild(cl);
+  out.push(p);
+
+  if(d.exclusions && d.exclusions.length){
+    // One list, one row per person, the way v1 showed it. Grouping by rule
+    // put the shape of the rejection first, but the controller argues about
+    // people: "why not C-5837?" is answered by finding C-5837, not by opening
+    // the rest group and scanning. Rows stay sorted by rule so like reasons
+    // still sit together, and the whole list is folded so it is available
+    // without being a wall.
+    const ep = panel('Why the others were ruled out', d.exclusions.length + ' excluded');
+    const byRule = {};
+    d.exclusions.forEach(x => (byRule[x.rule] = byRule[x.rule] || []).push(x));
+    const order = Object.keys(byRule).sort((a, b) => byRule[b].length - byRule[a].length);
+    // The engine already writes this sentence for the headline figure above.
+    // Printing it a second time in a second vocabulary made the panel disagree
+    // with its own header, so the header's string wins and the fallback uses
+    // the same words.
+    const shape = d.exclusions_orientation ||
+      order.map(r => byRule[r].length + ' ' + (RULE_WORD[r] || r)).join(', ');
+
+    ep.appendChild(more('Every candidate considered', d.exclusions.length + ' ruled out', () => {
+      const ul = el('ul', 'excl-list');
+      order.forEach(rule => byRule[rule].forEach(x => {
+        const li = el('li');
+        li.appendChild(el('strong', null, x.crew_id));
+        li.appendChild(document.createTextNode(' '));
+        // A reason with no rule id in it is not a rule breach: the reserve
+        // on-call window decides whether someone can be called at all, and
+        // the engine files it under RULE-BASE-07 for grouping. Showing that
+        // id in red here would contradict the distinction the product spends
+        // its whole check_assignment result making, so it gets a neutral chip.
+        if(!/RULE-[A-Z]+-\d+|DOUBLE-BOOKED/.test(x.reason || ''))
+          li.appendChild(el('span', 'tag info', 'not callable'));
+        reasonWithRules(li, x.reason, 'bad');
+        ul.appendChild(li);
+      }));
+      return ul;
+    }, {why: shape}));
+
+    out.push(ep);
+  }
+  return out;
+}
+
+/* A cost note says what it costs. The breach message is worded for a breach
+   ("based DEL, pairing departs BLR"), which is not what this is. */
+function costPhrase(x){
+  const c = x.context || {};
+  if(c.needs_positioning && c.base) return 'deadhead positioning from ' + c.base;
+  return x.message;
+}
+
+/* Not every rule in a timeline stops the duty. RULE-BASE-07 against a candidate
+   who is being positioned costs a deadhead and some delay; it does not make the
+   assignment illegal, and the check panel directly above says so in green. A red
+   badge under a green verdict reads as a contradiction, and in this palette red
+   is reserved for the thing that stops you. `stoppers` is the set of rules the
+   enclosing check actually counted against the assignment; anything else the
+   timeline turns up is a cost, and wears amber. Absent, everything is a breach,
+   which is right for a timeline asked for on its own. */
+function pTimeline(env, title, stoppers){
+  const d = env.data;
+  const p = panel(title || ('Duty week — ' + esc(d.crew_id)), d.duties.length + ' duty days');
+  const rail = el('div','rail');
+  d.duties.forEach((row, i) => {
+    if(i > 0 && row.rest_before_hours !== null){
+      const g = el('div','gap' + (row.rest_before_ok === false ? ' short' : ''));
+      const txt = row.overlaps_previous_by_hours !== null && row.overlaps_previous_by_hours !== undefined
+        ? 'overlaps the previous duty by ' + row.overlaps_previous_by_hours + 'h — cannot be worked'
+        : row.rest_before_hours + 'h rest' + (row.rest_before_ok === false
+            ? ' — under the ' + d.min_rest_hours + 'h minimum' : '');
+      g.appendChild(el('div','g', txt));
+      rail.appendChild(g);
+    }
+    const over = row.fdp_hours > row.fdp_limit;
+    const day = el('div','day' + (row.proposed ? ' proposed' : '') + (over ? ' breach' : ''));
+    day.appendChild(el('div','d', row.date));
+    const bar = el('div','bar');
+    bar.appendChild(el('div','t', hhmm(row.report_utc) + ' → ' + hhmm(row.release_utc) +
+      '   ' + row.fdp_hours + 'h / ' + row.fdp_limit + 'h limit'));
+    // The date is the row label two columns to the left, so the ids lose it.
+    bar.appendChild(el('div','m', (row.proposed ? 'PROPOSED COVER · ' : '') + row.pairing_id +
+      ' · ' + row.aircraft + ' · ' + row.sectors + ' sectors · ' +
+      row.flights.map(legNo).join(', ')));
+    day.appendChild(bar); rail.appendChild(day);
+  });
+  p.appendChild(rail);
+  if(d.breaches && d.breaches.length){
+    const b = el('div','pad');
+    d.breaches.forEach(x => {
+      const cost = stoppers ? !stoppers.has(x.rule) : false;
+      const line = el('div'); line.style.marginBottom = '5px';
+      const tag = el('span', 'tag ' + (cost ? 'warn' : 'illegal'),
+                     (cost ? 'cost: ' : '') + x.rule);
+      line.appendChild(tag);
+      line.appendChild(document.createTextNode(' ' + (cost ? costPhrase(x) : x.message)));
+      if(x.text){ const s = el('div'); s.style.cssText='font-size:12px;color:var(--ink-faint);margin-left:2px';
+        s.textContent = x.text; line.appendChild(s); }
+      b.appendChild(line);
+    });
+    p.appendChild(b);
+  }
+  return [p];
+}
+
+function pCheck(env){
+  const d = env.data, out = [];
+  const p = panel('Assignment check — ' + esc(d.crew_id) + ' on ' + esc(d.pairing_id));
+  const head = el('div','headline');
+  const f1 = el('div','fig'); f1.appendChild(el('div','k','Legal?'));
+  // Green always means yes. The label was "Breaches a rule?", so a legal
+  // candidate read as a green "No" beside a green "Yes" one column over.
+  f1.appendChild(el('div','v ' + (d.rules.legal ? 'good':'bad'), d.rules.legal ? 'Yes' : 'No'));
+  f1.appendChild(el('div','s', d.rules.legal ? 'all seven rules pass'
+                                             : d.rules.issues.join('; ')));
+  head.appendChild(f1);
+  const f2 = el('div','fig'); f2.appendChild(el('div','k','Can we call them out?'));
+  f2.appendChild(el('div','v ' + (d.callable.callable ? 'good':'bad'), d.callable.callable ? 'Yes' : 'No'));
+  f2.appendChild(el('div','s', d.callable.reason || (d.callable.is_reserve ? 'inside the on-call window'
+    : 'not a reserve — this would be a day-off callout')));
+  head.appendChild(f2);
+  const f3 = el('div','fig'); f3.appendChild(el('div','k','Reachability'));
+  f3.appendChild(el('div','v', d.callable.reachability_minutes + ' min'));
+  f3.appendChild(el('div','s','to report after callout'));
+  head.appendChild(f3);
+  p.appendChild(head);
+  p.appendChild(el('div','note','These are two different questions with two different answers. ' +
+    'Read the one you asked.'));
+  const cl = claimList(env); if(cl) p.appendChild(cl);
+  out.push(p);
+  // The timeline recomputes the week without knowing whether positioning was
+  // allowed, so it can carry a rule this check does not hold against anyone.
+  // Hand it the rules that actually stopped the assignment; the rest are costs.
+  if(d.timeline) out.push(...pTimeline({data:d.timeline},
+    'Duty week with the proposed cover inserted',
+    new Set((d.rules.breaches || []).map(x => x.rule))));
+  return out;
+}
+
+function pTrace(env){
+  const d = env.data;
+  const p = panel('Uncovered — ' + esc(d.crew_id) + ' off ' + esc(d.pairing_id),
+                  d.total_flights + ' flights');
+  const head = el('div','headline');
+  // The caption under a figure is a label, not a footnote. It used to carry a
+  // full list of flight ids under "Day 1 flights" and the disclaimer "per day,
+  // not the pairing total" under the passenger count, which is a sentence
+  // nobody reads at 6 a.m. The ids are chips below and the caption says which
+  // day it is; the table underneath already shows every day separately.
+  const day1 = (d.by_day && d.by_day[0]) ? d.by_day[0].date : '';
+  [['Role', d.role_on_pairing, d.aircraft],
+   ['Flights lost', d.total_flights, d.by_day.length + ' duty days'],
+   ['Passengers', d.passengers_day1, day1 ? 'on ' + day1 : 'day 1']]
+    .forEach(([k,v,s]) => { const f = el('div','fig'); f.appendChild(el('div','k',k));
+      f.appendChild(el('div','v accent', v)); f.appendChild(el('div','s',s)); head.appendChild(f); });
+  p.appendChild(head);
+
+  // Flight numbers as chips: DX412 reads, DX412-2026-09-15 does not, and the
+  // date is already the row it sits in.
+  const legs = el('div','legs');
+  d.day1.forEach(f => legs.appendChild(el('span','leg', legNo(f))));
+  p.appendChild(legs);
+  const tw = el('div','tw'), t = el('table');
+  t.innerHTML = '<thead><tr><th>Date</th><th>Passengers</th><th>Report</th><th>Release</th><th>Flights</th></tr></thead>';
+  const tb = el('tbody');
+  d.by_day.forEach(day => {
+    const tr = el('tr');
+    tr.appendChild(el('td', null, day.date));
+    tr.appendChild(el('td','num', day.passengers));
+    tr.appendChild(el('td','num', hhmm(day.report_utc)));
+    tr.appendChild(el('td','num', hhmm(day.release_utc)));
+    tr.appendChild(el('td', null, day.flights.map(legNo).join(', ')));
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb); tw.appendChild(t); p.appendChild(tw);
+  const mn = missingNote(env); if(mn) p.appendChild(mn);
+  return [p];
+}
+
+function pDelay(env){
+  const d = env.data;
+  const p = panel('Delay — ' + esc(d.aircraft) + ' ' + esc(d.date) + ' (' + esc(d.mode) + ')');
+  const head = el('div','headline');
+  const fig = (k,v,s,cls) => { const f = el('div','fig'); f.appendChild(el('div','k',k));
+    f.appendChild(el('div','v ' + (cls||''), v)); if(s) f.appendChild(el('div','s',s)); head.appendChild(f); };
+  fig('Delay', d.delay_hours + 'h', d.mode === 'technical' ? 'report held, duty grows' : 'both edges move');
+  fig('FDP after delay', d.fdp_after_delay + 'h', 'was ' + d.fdp_before + 'h', d.breach ? 'bad' : 'good');
+  fig('Limit', d.fdp_limit + 'h', d.sectors + ' sectors');
+  fig('Breach', d.breach ? 'Yes' : 'No', d.breach ? 'RULE-FDP-01' : 'crew stay legal', d.breach ? 'bad':'good');
+  p.appendChild(head);
+  if(d.breach_detail) p.appendChild(el('div','note', d.breach_detail));
+  const out = [p];
+  if(d.options && d.options.length){
+    const op = panel('Recovery options', d.options.length + ' options');
+    const tw = el('div','tw'), t = el('table');
+    t.innerHTML = '<thead><tr><th>#</th><th>Cost</th><th>Action</th><th>Why</th></tr></thead>';
+    const tb = el('tbody');
+    d.options.forEach(o => {
+      const tr = el('tr'); if(o.rank === 1) tr.className = 'pick';
+      tr.appendChild(el('td','num', o.rank));
+      tr.appendChild(el('td','cost', inr(o.cost_inr)));
+      tr.appendChild(el('td', null, o.action));
+      // The why is the whole argument for the option, and nowrap cut it at
+      // "Reserve set cove...". It is the one cell here that is a sentence.
+      tr.appendChild(el('td','wrap', o.reasoning));
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb); tw.appendChild(t); op.appendChild(tw); out.push(op);
+  }
+  return out;
+}
+
+function pClosure(env){
+  const d = env.data;
+  const p = panel('Station closure — ' + esc(d.station) + ' ' + esc(d.date),
+                  d.affected_flight_ids.length + ' flights');
+  const head = el('div','headline');
+  [['Window', d.window_utc, 'reopens ' + d.reopen_plus_30 + ' incl. 30 min'],
+   ['Flights affected', d.affected_flight_ids.length, 'arrivals count too'],
+   ['Passengers', d.passengers_at_risk, 'across affected legs'],
+   ['Need re-crew', (d.flights_needing_recrew || []).length, 'delay pushes crew past FDP']]
+   .forEach(([k,v,s]) => { const f = el('div','fig'); f.appendChild(el('div','k',k));
+     f.appendChild(el('div','v', v)); f.appendChild(el('div','s',s)); head.appendChild(f); });
+  p.appendChild(head);
+  const rows = d.per_flight_assessment || [];
+  if(rows.length){
+    const tw = el('div','tw'), t = el('table');
+    t.innerHTML = '<thead><tr><th>Min delay</th><th>Crew FDP</th><th>Limit</th><th>Flight</th>' +
+                  '<th>Pairing</th><th>Action</th></tr></thead>';
+    const tb = el('tbody');
+    rows.forEach(r => {
+      const bad = r.action.indexOf('exceeds') >= 0;
+      const tr = el('tr'); if(!bad) tr.className = 'dim';
+      tr.appendChild(el('td','num', r.min_delay_hours + 'h'));
+      const fd = el('td','num', r.crew_fdp_after_delay + 'h');
+      if(bad) fd.style.color = 'var(--red)';
+      tr.appendChild(fd);
+      tr.appendChild(el('td','num', r.fdp_limit + 'h'));
+      tr.appendChild(el('td', null, legNo(r.flight_id)));
+      tr.appendChild(el('td', null, r.pairing_id || '—'));
+      tr.appendChild(el('td', null, r.action));
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb); tw.appendChild(t); p.appendChild(tw);
+  }
+  return [p];
+}
+
+function pProfile(env){
+  const d = env.data;
+  const p = panel('Crew — ' + esc(d.crew_id) + ' ' + esc(d.name));
+  const head = el('div','headline');
+  const over = d.duty_headroom_7d <= 0;
+  [['Rank', d.rank, d.base + ' base'],
+   ['Ratings', d.ratings.join(', '), d.status],
+   ['Duty 7d', d.duty_hours_7d + 'h', 'to ' + d.as_of + ', limit ' + d.duty_limit_7d + 'h'],
+   ['Headroom', d.duty_headroom_7d + 'h', over ? 'at or over the limit' : 'under RULE-DUTY-02', over ? 'bad':'accent'],
+   ['Block 28d', d.flight_hours_28d + 'h', 'limit ' + d.flight_limit_28d + 'h'],
+   ['Reachability', d.reachability_minutes + ' min', d.reserve.is_reserve
+      ? 'reserve ' + d.reserve.oncall_window_utc.start + '–' + d.reserve.oncall_window_utc.end + 'Z'
+      : 'not on reserve']]
+   .forEach(([k,v,s,cls]) => { const f = el('div','fig'); f.appendChild(el('div','k',k));
+     f.appendChild(el('div','v ' + (cls||''), v)); f.appendChild(el('div','s',s)); head.appendChild(f); });
+  p.appendChild(head);
+  if(d.risk && d.risk.disruption_risk_score !== null && d.risk.disruption_risk_score !== undefined){
+    p.appendChild(el('div','note','Disruption risk ' + d.risk.disruption_risk_score +
+      ' — ' + (d.risk.drivers || []).join('; ') + '. A provided signal, never a legality rule.'));
+  }
+  const out = [p];
+  if(d.pairings_this_week && d.pairings_this_week.length){
+    // Every field on these rows -- the FDP limit and the rest gap included --
+    // was computed by the engine. Nothing here is a display default.
+    out.push(...pTimeline({data:{crew_id:d.crew_id, min_rest_hours:d.min_rest_hours,
+      breaches:[], duties:d.pairings_this_week}}, 'Rostered week'));
+  }
+  return out;
+}
+
+function pNotify(env){
+  const d = env.data;
+  const p = panel('Callout draft — ' + esc(d.crew_id) + ' on ' + esc(d.pairing_id));
+  p.appendChild(Object.assign(el('pre','draft'), {textContent: d.text}));
+  const mn = missingNote(env); if(mn) p.appendChild(mn);
+  return [p];
+}
+
+/* One cell. An array is a list, an on-call window is a window, and a flight id
+   drops the date it repeats from the row it is in. Everything else is text. */
+function cellText(v){
+  if(Array.isArray(v)) return v.map(x => isFlightId(x) ? legNo(x) : esc(x)).join(', ');
+  const win = windowText(v);
+  if(win) return win;
+  if(isFlightId(v)) return legNo(v);
+  return esc(v);
+}
+
+/* What the reply named, so a table can put it first.
+
+   This does not weaken invariant 1: every value in the table still comes from
+   the tool result, and the reply only decides the order of rows and a marker on
+   them. Q12 answered "DX401, DX402, DX588, DX589" over a table of eight other
+   flights with DX588 not among them, which is a 147-row dump next to a four-row
+   answer. */
+let answerText = '';
+function setAnswerText(t){ answerText = String(t ?? ''); }
+const ID_IN_PROSE = /\b(?:[A-Z]{2}\d{3,4}|C-\d{4}|P-\d{4}|VT-[A-Z]{3})\b/g;
+const namedIds = () => new Set(String(answerText).match(ID_IN_PROSE) || []);
+function rowIsNamed(r, ids){
+  if(!ids.size) return false;
+  return Object.keys(r).some(k => {
+    const v = r[k];
+    return typeof v === 'string' && (ids.has(v) || (isFlightId(v) && ids.has(legNo(v))));
+  });
+}
+
+function pTable(env, title){
+  const d = env.data;
+  const all = d.flights || d.crew || d.reserves || d.certifications || d.pairings || null;
+  if(!all || !all.length){
+    const p = panel(title || 'Lookup');
+    p.appendChild(stateBlock('', 'Nothing matched',
+      'The filters returned no rows. Check the date, or drop one filter and look again.'));
+    return [p];
+  }
+  // An object column used to be dropped whole, which is how a question about
+  // on-call windows got a table with no window in it. A window renders; any
+  // other nested payload is still unreadable in a cell and still goes.
+  const cols = Object.keys(all[0]).filter(k => {
+    const v = all[0][k];
+    if(v === null) return false;
+    if(typeof v !== 'object') return true;
+    return Array.isArray(v) || windowText(v) !== null;
+  });
+  // Once the date is off the flight id, FLIGHT ID and FLIGHT NO are the same
+  // column twice. Keep the one whose header a controller reads.
+  if(cols.includes('flight_id') && cols.includes('flight_no') &&
+     all.every(r => legNo(r.flight_id) === r.flight_no))
+    cols.splice(cols.indexOf('flight_id'), 1);
+
+  const ids = namedIds();
+  const named = ids.size ? all.filter(r => rowIsNamed(r, ids)) : [];
+  const hoisted = named.length > 0 && named.length < all.length;
+  const rows = hoisted ? named.concat(all.filter(r => named.indexOf(r) < 0)) : all;
+
+  const p = panel(title || 'Lookup', all.length + ' rows');
+  const tw = el('div','tw'), t = el('table');
+  const thead = el('thead'), htr = el('tr');
+  cols.forEach(c => htr.appendChild(el('th', null, c.replace(/_/g,' '))));
+  thead.appendChild(htr); t.appendChild(thead);
+  const tb = el('tbody');
+  const rowNode = r => {
+    const tr = el('tr');
+    const mark = hoisted && named.indexOf(r) >= 0;
+    if(mark) tr.className = 'named';
+    cols.forEach((c, i) => {
+      const v = r[c];
+      const td = el('td', typeof v === 'number' ? 'num' : null, cellText(v));
+      if(mark && i === 0) td.appendChild(el('span','named-mark','in the reply'));
+      tr.appendChild(td);
+    });
+    return tr;
+  };
+  // 142 crew is a scroll, not an answer. Show enough to see the shape of the
+  // result, and fold the rest behind a count that says what is being held back.
+  // A row the answer named is never folded: it is the answer.
+  const CAP = 120;
+  const HEAD = Math.min(Math.max(8, named.length), 20);
+  rows.slice(0, HEAD).forEach(r => tb.appendChild(rowNode(r)));
+  t.appendChild(tb); tw.appendChild(t); p.appendChild(tw);
+  if(hoisted) p.appendChild(el('div','note',
+    'The ' + named.length + ' rows the answer names are shown first.'));
+
+  if(rows.length > HEAD){
+    const shown = Math.min(rows.length, CAP);
+    p.appendChild(more('The other ' + (shown - HEAD) + ' rows', rows.length + ' in total', () => {
+      const tw2 = el('div','tw'), t2 = el('table');
+      const th2 = el('thead'), htr2 = el('tr');
+      cols.forEach(c => htr2.appendChild(el('th', null, c.replace(/_/g,' '))));
+      th2.appendChild(htr2); t2.appendChild(th2);
+      const tb2 = el('tbody');
+      rows.slice(HEAD, CAP).forEach(r => tb2.appendChild(rowNode(r)));
+      t2.appendChild(tb2); tw2.appendChild(t2);
+      if(rows.length > CAP) tw2.appendChild(el('div','note',
+        'Showing the first ' + CAP + ' of ' + rows.length + ' rows. Narrow the ' +
+        'filters to see the rest.'));
+      return tw2;
+    }));
+  }
+  const cl = claimList(env); if(cl) p.appendChild(cl);
+  return [p];
+}
+
+/* Rest is one subtraction, so this panel is three figures and a caveat. It
+   exists because without it the tool had no case in panelsFor, the turn drew
+   nothing, and the workspace announced that nothing had been computed while
+   the chat footer named the tool that had computed it. */
+function pEarliest(env){
+  const d = env.data;
+  const p = panel('Earliest next report');
+  const head = el('div','headline');
+  const fig = (k,v,s,cls) => { const f = el('div','fig'); f.appendChild(el('div','k',k));
+    f.appendChild(el('div','v ' + (cls||''), v)); if(s) f.appendChild(el('div','s',s));
+    head.appendChild(f); };
+  fig('Released', hhmm(d.released_utc), dayOf(d.released_utc));
+  fig('Rest required', d.min_rest_hours + 'h', 'minimum between duties');
+  // Amber: this is the figure the controller writes down.
+  fig('Earliest report', hhmm(d.earliest_report_utc), dayOf(d.earliest_report_utc), 'accent');
+  p.appendChild(head);
+  const note = el('div','note');
+  note.appendChild(ruleTag(d.rule || 'RULE-REST-04'));
+  note.appendChild(document.createTextNode(
+    ' — minimum only; a specific duty still needs a legality check.'));
+  p.appendChild(note);
+  const cl = claimList(env); if(cl) p.appendChild(cl);
+  return [p];
+}
+
+function pValidate(env){
+  const d = env.data;
+  const p = panel('Claim check');
+  const head = el('div','headline');
+  const f = el('div','fig');
+  f.appendChild(el('div','k','Verdict'));
+  f.appendChild(el('div','v ' + (d.verdict ? 'good':'bad'), d.verdict ? 'Confirmed' : 'Refuted'));
+  f.appendChild(el('div','s', env.summary));
+  head.appendChild(f); p.appendChild(head);
+  const cl = claimList(env); if(cl) p.appendChild(cl);
+  return [p];
+}
+
+/* Deterministic routing: tool name -> panel. The model has no say. */
+function panelsFor(name, args, env){
+  if(env.data && env.data.error) {
+    const p = panel('Could not compute');
+    p.appendChild(stateBlock('err', 'The engine rejected that request', env.summary));
+    return [p];
+  }
+  switch(name){
+    case 'resolve_cover':        return env.data.per_vacancy ? pJoint(env) : pResolve(env);
+    case 'check_assignment':     return pCheck(env);
+    case 'duty_timeline':        return pTimeline(env);
+    case 'trace_disruption':     return pTrace(env);
+    case 'crew_profile':         return pProfile(env);
+    case 'draft_notification':   return pNotify(env);
+    case 'earliest_next_report': return pEarliest(env);
+    case 'validate':             return pValidate(env);
+    case 'simulate_disruption':
+      if(args && args.kind === 'closure') return pClosure(env);
+      if(args && args.kind === 'cancellation') return pTable(env, 'Cancellation cost');
+      return pDelay(env);
+    case 'lookup':               return pTable(env, 'Lookup — ' + (args && args.entity || ''));
+    default:                     return [];
+  }
+}
+
+function pJoint(env){
+  const d = env.data, out = [];
+  const p = panel('Joint plan — ' + d.vacancies.length + ' vacancies', d.plan_count + ' legal plans');
+  const head = el('div','headline');
+  const fig = (k,v,s,cls) => { const f = el('div','fig'); f.appendChild(el('div','k',k));
+    f.appendChild(el('div','v ' + (cls||''), v)); if(s) f.appendChild(el('div','s',s)); head.appendChild(f); };
+  fig('Total cost', inr(d.total_cost_inr), 'cheapest of ' + d.plan_count + ' plans', 'accent');
+  if(d.tie_count > 1) fig('Tied at that cost', d.tie_count,
+    'cost does not decide — choose on reachability', 'accent');
+  p.appendChild(head);
+  const tw = el('div','tw'), t = el('table');
+  t.innerHTML = '<thead><tr><th>Cost</th><th>Pairing</th><th>Action</th></tr></thead>';
+  const tb = el('tbody');
+  d.optimal.assignments.forEach((a, i) => {
+    const tr = el('tr'); tr.className = 'pick';
+    tr.appendChild(el('td','cost', inr(a.cost_inr)));
+    tr.appendChild(el('td', null, d.vacancies[i].pairing_id));
+    tr.appendChild(el('td', null, a.action));
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb); tw.appendChild(t); p.appendChild(tw);
+  if(d.tie_count > 1) p.appendChild(el('div','note',
+    d.tie_count + ' plans cost exactly the same. When cost cannot separate the options the decision ' +
+    'is yours, and it turns on reachability.'));
+  const cl = claimList(env); if(cl) p.appendChild(cl);
+  out.push(p);
+  // The plan above is the answer. Each vacancy's full ranked table is the
+  // working behind one line of it, and two thirteen-row tables open below the
+  // fold bury the plan they support. One summary line each, which says enough
+  // to not need opening: what was ranked, how many options, and who won.
+  (d.per_vacancy || []).forEach(v => {
+    const rec = v.recommended && (v.recommended.crew_id || 'cancellation');
+    const f = more('Ranked cover — ' + esc(v.pairing_id) + ' ' + esc(v.role),
+      (v.option_count || (v.options || []).length) + ' options',
+      () => {
+        const box = el('div');
+        pResolve({data:v, claims:[], missing:[]}).forEach(n => box.appendChild(n));
+        return box;
+      },
+      {why: rec ? 'recommended ' + rec : ''});
+    f.classList.add('standalone');
+    out.push(f);
+  });
+  return out;
+}
+
+/* --- every answer keeps its own workspace -------------------------------
+
+   The workspace holds one case at a time, so a follow-up replaces the panel
+   the controller was still reading, and a turn that draws nothing leaves the
+   previous question's view up. Rather than have the model decide whether the
+   canvas is still relevant, each answer carries a button back to its own.
+   The conversation becomes the history of what was shown.
+
+   It re-renders from the tool results already in the browser: no model call,
+   no network call, and it works with the model switched off. */
+let shownTurn = null;
+
+function markShown(node){
+  if(shownTurn) shownTurn.classList.remove('showing');
+  shownTurn = node || null;
+  if(node) node.classList.add('showing');
+}
+
+/* The steps this turn produced that a panel can actually draw. A Tier-1
+   lookup answered in one line has no workspace view to return to, and a
+   button that opens nothing is worse than no button. */
+function drawableSteps(r){
+  return (r.tool_results || [])
+    .map((env, i) => ({env, call: (r.tool_calls || [])[i]}))
+    .filter(x => {
+      if(!x.call || !x.env || !x.env.data) return false;
+      // A renderer is the wrong place to lose an answer. If a payload is not
+      // the shape this panel expects, drop the panel and keep the turn: the
+      // prose is already grounded, and a blank workspace beats a blank page.
+      try{ return panelsFor(x.call.name, x.call.arguments || {}, x.env).length > 0; }
+      catch(e){ console.warn('panel failed for ' + x.call.name, e); return false; }
+    });
+}
+
+/* Draw the most decisive result, not the last one.
+
+   The model orients itself with lookups and often verifies its own answer
+   afterwards, so the final call is frequently a check rather than the plan.
+   Drawing it left the ranked cover -- the thing the controller acts on --
+   off screen behind a two-line confirmation. Tier ranks the tools by how much
+   of the decision they carry; the latest call wins a tie, because that is the
+   one the model answered from. */
+function mostDecisive(steps){
+  return steps.reduce((best, s, i) => {
+    const rank = s.env.data.error ? -1 : (TOOL_TIER[s.call.name] || 0);
+    return !best || rank >= best.rank ? {rank, i, s} : best;
+  }, null).s;
+}
+
+function showSteps(steps, label, node){
+  const pick = mostDecisive(steps);
+  setPanels(panelsFor(pick.call.name, pick.call.arguments || {}, pick.env), label);
+  markShown(node);
+}
+
+function evidenceButton(steps, label, node){
+  if(!steps.length) return null;
+  const b = el('button', 'evidence-btn', 'Show in workspace');
+  b.type = 'button';
+  b.title = 'Re-open the workspace view for this answer';
+  b.addEventListener('click', () => showSteps(steps, label, node));
+  // Sits in the tool-chip row, pushed right: it belongs to the same idea as
+  // the chips, which is what this answer was built from.
+  let row = node.querySelector('.trace');
+  if(!row){ row = el('div','trace'); node.appendChild(row); }
+  row.appendChild(b);
+  return b;
+}
+
+/* --- drill-down: calls the tool endpoint directly, model or no model ----- */
+async function drill(crew_id, pairing_id, from_date){
+  try{
+    const env = await runTool('check_assignment', {crew_id, pairing_id, from_date});
+    pushPanels(panelsFor('check_assignment', {}, env), 'Why ' + crew_id);
+  }catch(e){
+    pushPanels([(() => { const p = panel('Could not load');
+      p.appendChild(stateBlock('err','The engine did not answer', e.message)); return p; })()],
+      'Why ' + crew_id);
+  }
+}
+
+/* --- starters run the engine directly, so the demo works with no model --- */
+const STARTERS = [
+  ['Captain C-1042 is sick for P-2291 — what should I do?',
+   'resolve_cover', {pairing_id:'P-2291', vacated_by:'C-1042', limit:8}],
+  ['Which flights go uncrewed if C-1042 drops out?',
+   'trace_disruption', {crew_id:'C-1042', pairing_id:'P-2291'}],
+  ['Why was C-5837 ruled out?',
+   'check_assignment', {crew_id:'C-5837', pairing_id:'P-2291'}],
+  ['Both A320 captains (VT-DXA, VT-DXB) are sick at 00:30Z on 18 Sep',
+   'resolve_cover', {vacancies:[{pairing_id:'P-2205', role:'Captain', label:'assign_dxa'},
+                                {pairing_id:'P-2212', role:'Captain', label:'assign_dxb'}]}],
+  ['VT-DXA is 90 minutes late on 16 Sep',
+   'simulate_disruption', {kind:'delay', aircraft:'VT-DXA', on_date:'2026-09-16',
+                           delay_hours:1.5, mode:'technical'}],
+  ['BLR closes 08:00–14:00Z on 17 Sep',
+   'simulate_disruption', {kind:'closure', station:'BLR', on_date:'2026-09-17',
+                           start_utc:'08:00', end_utc:'14:00'}]
+];
+
+function buildStarters(){
+  const host = $('#starters');
+  STARTERS.forEach(([label, tool, args]) => {
+    const b = el('button', null, label); b.type = 'button';
+    // The tier is a property of the tool this starter runs, not something
+    // inferred from the wording. Nothing reads a typed question and decides
+    // its tier, so no badge is ever shown on one.
+    const tier = TOOL_TIER[tool];
+    if(tier) b.appendChild(el('span','tier t' + tier + ' devonly', 'T' + tier));
+    b.addEventListener('click', async () => {
+      if(modelReady){ $('#input').value = label; $('#composer').requestSubmit(); return; }
+      say('Controller', label, 'you');
+      try{
+        const env = await runTool(tool, args);
+        setAnswerText(env.summary);
+        const n = say('Engine', env.summary, 'note');
+        trace(n, [{name: tool}]);
+        const steps = drawableSteps({tool_results:[env], tool_calls:[{name:tool, arguments:args}]});
+        if(steps.length){ showSteps(steps, label, n); evidenceButton(steps, label, n); }
+      }catch(e){ say('Engine', e.message, 'err'); }
+    });
+    host.appendChild(b);
+  });
+}
+
+/* --- chat submit -------------------------------------------------------- */
+$('#composer').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const q = $('#input').value.trim(); if(!q) return;
+  $('#input').value = ''; $('#send').disabled = true;
+  say('Controller', q, 'you');
+  const pending = say('Advisor', 'Working…', 'note');
+  try{
+    const r = await api('/api/chat', {message: q});
+    pending.remove();
+    // A table can put the rows this answer names first, so it has to know what
+    // they are before anything is drawn.
+    setAnswerText(r.reply);
+    const m = say('Advisor', renderAnswer(r.reply));
+    trace(m, r.tool_calls);
+    // The gate firing is the product working, so say that. It is also detail a
+    // controller does not need, so it goes with the other dev-view material.
+    if(r.corrected) say('Claim gate', 'The draft cited a figure no tool had computed. ' +
+      'It was regenerated; the reply above passed.', 'note devonly');
+    // Invariant 1 and 2: draw from the tool results, in the order the agent
+    // committed to them -- the last result is the one it answered from.
+    const steps = drawableSteps(r);
+    if(steps.length){
+      showSteps(steps, q, m);
+      evidenceButton(steps, q, m);
+    }else{
+      // Invariant 3: never leave the previous question's evidence on screen
+      // next to this question's answer. They would disagree, and the panel is
+      // the thing a controller acts on.
+      clearPanels(...emptyState(r));
+      markShown(null);
+    }
+  }catch(e){
+    pending.remove();
+    say('Advisor', e.message + (e.hint ? ' — ' + e.hint : ''), 'err');
+  }finally{
+    $('#send').disabled = false; $('#input').focus();
+  }
+});
+$('#input').addEventListener('keydown', e => {
+  if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); $('#composer').requestSubmit(); }
+  if(e.key === 'Escape'){ $('#input').value = ''; }
+});
+
+/* --- boot --------------------------------------------------------------- */
+(async () => {
+  buildStarters();
+  $('#boundary').addEventListener('click', () => showBoundary().catch(e =>
+    modal('The boundary', () => stateBlock('err','Could not load it', e.message))));
+  $('#flow').addEventListener('click', showFlow);
+  $('#brief').addEventListener('click', showBriefing);
+
+  // Dev view: the briefing button and the tool tiers. Off by default, because
+  // a controller does not care which tier a tool is; a judge does.
+  const dev = $('#devview');
+  try{ dev.checked = localStorage.getItem('dev') === '1'; }catch(e){}
+  const applyDev = () => {
+    document.body.classList.toggle('dev', dev.checked);
+    try{ localStorage.setItem('dev', dev.checked ? '1' : '0'); }catch(e){}
+  };
+  dev.addEventListener('change', applyDev);
+  applyDev();
+
+  // Clear puts the desk back to how it was found, openers included. Between
+  // two judges the presenter needs the starting screen, not a blank column.
+  $('#clear').addEventListener('click', async () => {
+    // The agent keeps the conversation so a follow-up can say "now what?"
+    // without repeating the pairing. Clearing the log has to clear that too,
+    // or the next question silently inherits the last one.
+    try{ await api('/api/reset', {}); }catch(e){}
+    location.reload();
+  });
+  $('#panels').appendChild((() => {
+    const p = panel('Nothing loaded yet');
+    p.appendChild(stateBlock('', 'Pick a disruption, or describe one',
+      'The workspace fills with whatever the engine computes. Every figure it shows was ' +
+      'produced by the rules engine, never by the language model.'));
+    return p;
+  })());
+  try{
+    const [h, tools] = await Promise.all([getJSON('/api/health'), getJSON('/api/tools')]);
+    modelReady = !!h.model;
+    $('#dot').className = 'dot' + (modelReady ? '' : ' off');
+    const st = $('#status');
+    st.textContent = '';
+    st.appendChild(document.createTextNode('snapshot '));
+    st.appendChild(el('b', null, h.snapshot || '2026-09-14 18:00Z'));
+    st.appendChild(document.createTextNode(
+      ' · ' + h.crew + ' crew · ' + h.flights + ' flights · ' + tools.length + ' tools · '));
+    st.appendChild(el('b', null, modelReady ? (h.model_name || 'model ready') : 'engine only'));
+    if(!modelReady){
+      $('#input').placeholder = 'No model configured — use the buttons above to drive the engine directly';
+      $('#workhint').textContent = 'Model off. The workspace runs on the engine alone.';
+    }
+  }catch(e){
+    $('#status').textContent = 'engine unreachable';
+    setPanels([(() => { const p = panel('Engine unavailable');
+      p.appendChild(stateBlock('err','Cannot reach the engine',
+        'Start it with: python -m aircrew.server')); return p; })()]);
+  }
+  $('#input').focus();
+})();
+</script>
+</body>
+</html>
